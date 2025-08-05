@@ -95,8 +95,8 @@ class _TSPHomePageState extends State<TSPHomePage> {
           
           if (existingIndex != -1) {
             // Check if clicking on first city to close the path
-            if (i == manualPath.first && manualPath.length >= 3 && !isPathClosed) {
-              // Check if closing path is valid (no blockers crossed)
+            if (i == manualPath.first && manualPath.length == cities.length && !isPathClosed) {
+              // Check if closing path is valid (no blockers crossed) and all cities are included
               if (_isValidPath([...manualPath, manualPath.first])) {
                 isPathClosed = true;
                 pathLength = _calculatePathLength(path);
@@ -230,19 +230,19 @@ class _TSPHomePageState extends State<TSPHomePage> {
     setState(() {
       const int numBlockers = 3;
       const double minDistance = 30.0; // Minimum distance from cities and other blockers
-      const double margin = 50.0; // Margin from edges
-      
-      // Get canvas size (approximate)
-      double canvasWidth = 400.0; // You might want to get actual canvas size
-      double canvasHeight = 400.0;
+      const double margin = 20.0; // Margin from edges
       
       Random random = Random();
       int attempts = 0;
-      const int maxAttempts = 100;
+      const int maxAttempts = 200;
       
-      blockers.clear(); // Clear existing blockers
+      // Don't clear existing blockers - add to them instead
       
       for (int i = 0; i < numBlockers && attempts < maxAttempts; attempts++) {
+        // Use conservative canvas size to ensure visibility
+        double canvasWidth = 350.0;  // Reduced to be more conservative
+        double canvasHeight = 250.0; // Reduced to be more conservative
+        
         double x = margin + random.nextDouble() * (canvasWidth - 2 * margin);
         double y = margin + random.nextDouble() * (canvasHeight - 2 * margin);
         Offset newBlocker = Offset(x, y);
@@ -457,112 +457,104 @@ class _TSPHomePageState extends State<TSPHomePage> {
               ],
             ),
           ),
-          // Control buttons
+          // Control buttons - compressed for mobile
           Padding(
-            padding: EdgeInsets.all(8),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            padding: EdgeInsets.all(4),
+            child: Wrap(
+              spacing: 4,
+              runSpacing: 4,
+              alignment: WrapAlignment.center,
               children: [
-                ElevatedButton.icon(
+                _buildCompactButton(
                   onPressed: cities.length >= 3 ? _solveTSP : null,
-                  icon: Icon(Icons.route),
-                  label: Text('Solve TSP'),
+                  icon: Icons.route,
+                  label: 'Solve',
                 ),
-                ElevatedButton.icon(
+                _buildCompactButton(
                   onPressed: showPath && path.length >= 4 ? _optimizePath : null,
-                  icon: Icon(Icons.trending_up),
-                  label: Text('Optimize'),
+                  icon: Icons.trending_up,
+                  label: 'Optimize',
                 ),
-                ElevatedButton.icon(
+                _buildCompactButton(
                   onPressed: cities.length >= 2 ? _startManualMode : null,
-                  icon: Icon(Icons.touch_app),
-                  label: Text('Manual'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: isManualMode ? Colors.purple[600] : null,
-                    foregroundColor: isManualMode ? Colors.white : null,
-                  ),
+                  icon: Icons.touch_app,
+                  label: 'Manual',
+                  backgroundColor: isManualMode ? Colors.purple[600] : null,
+                  foregroundColor: isManualMode ? Colors.white : null,
                 ),
-                ElevatedButton.icon(
+                _buildCompactButton(
                   onPressed: _clearCities,
-                  icon: Icon(Icons.clear),
-                  label: Text('Clear'),
+                  icon: Icons.clear,
+                  label: 'Clear',
                 ),
               ],
             ),
           ),
-          // Blocker controls
+          // Blocker controls - compressed
           Padding(
-            padding: EdgeInsets.symmetric(horizontal: 8),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                ElevatedButton.icon(
-                  onPressed: _addRandomBlockers,
-                  icon: Icon(Icons.block),
-                  label: Text('Add Blockers'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.brown[600],
-                    foregroundColor: Colors.white,
-                  ),
-                ),
-              ],
+            padding: EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+            child: _buildCompactButton(
+              onPressed: _addRandomBlockers,
+              icon: Icons.block,
+              label: 'Add Blockers',
+              backgroundColor: Colors.brown[600],
+              foregroundColor: Colors.white,
             ),
           ),
-          // Manual mode controls
+          // Manual mode controls - compressed
           if (isManualMode)
             Container(
-              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               color: Colors.purple[50],
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              child: Wrap(
+                spacing: 4,
+                alignment: WrapAlignment.center,
                 children: [
                   Text(
-                    'Manual Path Building',
+                    'Manual Mode',
                     style: TextStyle(
                       fontWeight: FontWeight.bold,
                       color: Colors.purple[700],
+                      fontSize: 14,
                     ),
                   ),
-                  ElevatedButton.icon(
+                  _buildCompactButton(
                     onPressed: _clearManualPath,
-                    icon: Icon(Icons.refresh, size: 16),
-                    label: Text('Reset Path'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.orange[600],
-                      foregroundColor: Colors.white,
-                      padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    ),
+                    icon: Icons.refresh,
+                    label: 'Reset',
+                    backgroundColor: Colors.orange[600],
+                    foregroundColor: Colors.white,
+                    isSmall: true,
                   ),
-                  ElevatedButton.icon(
+                  _buildCompactButton(
                     onPressed: _exitManualMode,
-                    icon: Icon(Icons.exit_to_app, size: 16),
-                    label: Text('Exit'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.grey[600],
-                      foregroundColor: Colors.white,
-                      padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    ),
+                    icon: Icons.exit_to_app,
+                    label: 'Exit',
+                    backgroundColor: Colors.grey[600],
+                    foregroundColor: Colors.white,
+                    isSmall: true,
                   ),
                 ],
               ),
             ),
-          // Mode selection
+          // Mode selection - compressed
           if (!isManualMode)
             Container(
-              padding: EdgeInsets.all(16),
+              padding: EdgeInsets.all(8),
               child: Column(
                 children: [
                   Text(
-                    'Interaction Mode:',
+                    'Mode:',
                     style: TextStyle(
-                      fontSize: 16,
+                      fontSize: 14,
                       fontWeight: FontWeight.bold,
                       color: Colors.grey[700],
                     ),
                   ),
-                  SizedBox(height: 8),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  SizedBox(height: 4),
+                  Wrap(
+                    spacing: 4,
+                    alignment: WrapAlignment.center,
                     children: [
                       _buildModeButton(InteractionMode.add, Icons.add_location, 'Add'),
                       _buildModeButton(InteractionMode.delete, Icons.delete_outline, 'Delete'),
@@ -572,12 +564,12 @@ class _TSPHomePageState extends State<TSPHomePage> {
                 ],
               ),
             ),
-          // Instructions
+          // Instructions - compressed
           Padding(
-            padding: EdgeInsets.symmetric(horizontal: 16),
+            padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             child: Text(
               _getInstructionText(),
-              style: TextStyle(color: Colors.grey[600]),
+              style: TextStyle(color: Colors.grey[600], fontSize: 12),
               textAlign: TextAlign.center,
             ),
           ),
@@ -612,24 +604,24 @@ class _TSPHomePageState extends State<TSPHomePage> {
               ),
             ),
           ),
-          // City and blocker count
+          // City and blocker count - compressed
           Padding(
-            padding: EdgeInsets.all(16),
+            padding: EdgeInsets.all(8),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Text(
                   'Cities: ${cities.length}',
                   style: TextStyle(
-                    fontSize: 16,
+                    fontSize: 14,
                     color: Colors.grey[700],
                   ),
                 ),
-                SizedBox(width: 20),
+                SizedBox(width: 16),
                 Text(
                   'Blockers: ${blockers.length}',
                   style: TextStyle(
-                    fontSize: 16,
+                    fontSize: 14,
                     color: Colors.brown[700],
                   ),
                 ),
@@ -637,6 +629,30 @@ class _TSPHomePageState extends State<TSPHomePage> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildCompactButton({
+    required VoidCallback? onPressed,
+    required IconData icon,
+    required String label,
+    Color? backgroundColor,
+    Color? foregroundColor,
+    bool isSmall = false,
+  }) {
+    return ElevatedButton.icon(
+      onPressed: onPressed,
+      icon: Icon(icon, size: isSmall ? 14 : 16),
+      label: Text(label, style: TextStyle(fontSize: isSmall ? 11 : 12)),
+      style: ElevatedButton.styleFrom(
+        backgroundColor: backgroundColor,
+        foregroundColor: foregroundColor,
+        padding: EdgeInsets.symmetric(
+          horizontal: isSmall ? 6 : 8, 
+          vertical: isSmall ? 4 : 6
+        ),
+        minimumSize: Size(0, isSmall ? 28 : 32),
       ),
     );
   }
@@ -652,13 +668,13 @@ class _TSPHomePageState extends State<TSPHomePage> {
         });
       },
       child: Container(
-        padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
         decoration: BoxDecoration(
           color: isSelected ? Colors.blue[600] : Colors.grey[200],
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(16),
           border: Border.all(
             color: isSelected ? Colors.blue[800]! : Colors.grey[400]!,
-            width: 2,
+            width: 1,
           ),
         ),
         child: Row(
@@ -667,14 +683,15 @@ class _TSPHomePageState extends State<TSPHomePage> {
             Icon(
               icon,
               color: isSelected ? Colors.white : Colors.grey[700],
-              size: 20,
+              size: 16,
             ),
-            SizedBox(width: 4),
+            SizedBox(width: 2),
             Text(
               label,
               style: TextStyle(
                 color: isSelected ? Colors.white : Colors.grey[700],
                 fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                fontSize: 12,
               ),
             ),
           ],
@@ -685,24 +702,26 @@ class _TSPHomePageState extends State<TSPHomePage> {
 
   String _getInstructionText() {
     if (isManualMode) {
-      String baseText = 'Click cities in order to build path. Invalid connections blocked.';
-      if (manualPath.length >= 3 && !isPathClosed) {
-        baseText += ' Click first city again to close path.';
+      String baseText = 'Click cities in order. Invalid connections blocked.';
+      if (manualPath.length == cities.length && !isPathClosed) {
+        baseText += ' Click first city to close path.';
       } else if (isPathClosed) {
-        baseText += ' Path is closed! Click first city to reopen.';
+        baseText += ' Path closed!';
+      } else if (manualPath.length < cities.length) {
+        baseText += ' Need all ${cities.length} cities to close.';
       }
-      return '$baseText Path: ${manualPath.length} cities';
+      return '$baseText (${manualPath.length}/${cities.length})';
     }
     
     switch (currentMode) {
       case InteractionMode.add:
-        return 'Tap anywhere to add cities. Need minimum 3 cities to solve TSP.';
+        return 'Tap to add cities. Need 3+ cities for TSP.';
       case InteractionMode.delete:
-        return 'Tap on any city or blocker to delete it.';
+        return 'Tap cities or blockers to delete.';
       case InteractionMode.move:
-        return 'Drag any city or blocker to move it. Path length updates in real-time.';
+        return 'Drag cities or blockers to move.';
       case InteractionMode.manual:
-        return 'Click cities in order to build path manually.';
+        return 'Click cities in order to build path.';
     }
   }
 }
@@ -923,7 +942,7 @@ class TSPPainter extends CustomPainter {
           currentBorderPaint = manualCityBorderPaint;
           
           // Highlight the first city differently if path can be closed
-          if (i == manualPath.first && manualPath.length >= 3) {
+          if (i == manualPath.first && manualPath.length == cities.length) {
             if (isPathClosed) {
               // Show closed state with special color
               currentCityPaint = Paint()
