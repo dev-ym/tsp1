@@ -25,11 +25,13 @@ class TSPHomePage extends StatefulWidget {
 
 class _TSPHomePageState extends State<TSPHomePage> {
   List<Offset> cities = [];
+  List<Offset> blockers = [];
   List<int> path = [];
   double pathLength = 0.0;
   bool showPath = false;
   InteractionMode currentMode = InteractionMode.add;
   int? draggedCityIndex;
+  int? draggedBlockerIndex;
   bool isManualMode = false;
   List<int> manualPath = [];
   bool isPathClosed = false;
@@ -54,6 +56,7 @@ class _TSPHomePageState extends State<TSPHomePage> {
   void _deleteCity(Offset tapPosition) {
     const double tapRadius = 20.0;
     
+    // Check cities first
     for (int i = 0; i < cities.length; i++) {
       double distance = sqrt(pow(cities[i].dx - tapPosition.dx, 2) + 
                            pow(cities[i].dy - tapPosition.dy, 2));
@@ -62,7 +65,20 @@ class _TSPHomePageState extends State<TSPHomePage> {
           cities.removeAt(i);
           _resetPath();
         });
-        break;
+        return;
+      }
+    }
+    
+    // Check blockers
+    for (int i = 0; i < blockers.length; i++) {
+      double distance = sqrt(pow(blockers[i].dx - tapPosition.dx, 2) + 
+                           pow(blockers[i].dy - tapPosition.dy, 2));
+      if (distance <= tapRadius) {
+        setState(() {
+          blockers.removeAt(i);
+          _resetPath();
+        });
+        return;
       }
     }
   }
@@ -80,9 +96,11 @@ class _TSPHomePageState extends State<TSPHomePage> {
           if (existingIndex != -1) {
             // Check if clicking on first city to close the path
             if (i == manualPath.first && manualPath.length >= 3 && !isPathClosed) {
-              // Close the path
-              isPathClosed = true;
-              pathLength = _calculatePathLength(path);
+              // Check if closing path is valid (no blockers crossed)
+              if (_isValidPath([...manualPath, manualPath.first])) {
+                isPathClosed = true;
+                pathLength = _calculatePathLength(path);
+              }
             } else if (isPathClosed && i == manualPath.first) {
               // Reopen the path if clicking first city again when closed
               isPathClosed = false;
@@ -95,11 +113,13 @@ class _TSPHomePageState extends State<TSPHomePage> {
               pathLength = _calculatePathLength(path);
             }
           } else {
-            // Add city to path
-            manualPath.add(i);
-            path = List.from(manualPath);
-            isPathClosed = false; // Adding new city reopens path
-            pathLength = _calculatePathLength(path);
+            // Add city to path - check if connection is valid
+            if (manualPath.isEmpty || _isValidConnection(cities[manualPath.last], cities[i])) {
+              manualPath.add(i);
+              path = List.from(manualPath);
+              isPathClosed = false; // Adding new city reopens path
+              pathLength = _calculatePathLength(path);
+            }
           }
           
           showPath = manualPath.length > 1;
@@ -145,29 +165,48 @@ class _TSPHomePageState extends State<TSPHomePage> {
     
     const double tapRadius = 20.0;
     
+    // Check cities first
     for (int i = 0; i < cities.length; i++) {
       double distance = sqrt(pow(cities[i].dx - details.localPosition.dx, 2) + 
                            pow(cities[i].dy - details.localPosition.dy, 2));
       if (distance <= tapRadius) {
         draggedCityIndex = i;
-        break;
+        return;
+      }
+    }
+    
+    // Check blockers
+    for (int i = 0; i < blockers.length; i++) {
+      double distance = sqrt(pow(blockers[i].dx - details.localPosition.dx, 2) + 
+                           pow(blockers[i].dy - details.localPosition.dy, 2));
+      if (distance <= tapRadius) {
+        draggedBlockerIndex = i;
+        return;
       }
     }
   }
 
   void _handlePanUpdate(DragUpdateDetails details) {
-    if (currentMode != InteractionMode.move || draggedCityIndex == null) return;
+    if (currentMode != InteractionMode.move) return;
     
     setState(() {
-      cities[draggedCityIndex!] = details.localPosition;
-      if (showPath) {
-        pathLength = _calculatePathLength(path);
+      if (draggedCityIndex != null) {
+        cities[draggedCityIndex!] = details.localPosition;
+        if (showPath) {
+          pathLength = _calculatePathLength(path);
+        }
+      } else if (draggedBlockerIndex != null) {
+        blockers[draggedBlockerIndex!] = details.localPosition;
+        if (showPath) {
+          pathLength = _calculatePathLength(path);
+        }
       }
     });
   }
 
   void _handlePanEnd(DragEndDetails details) {
     draggedCityIndex = null;
+    draggedBlockerIndex = null;
   }
 
   void _resetPath() {
@@ -182,12 +221,111 @@ class _TSPHomePageState extends State<TSPHomePage> {
   void _clearCities() {
     setState(() {
       cities.clear();
+      blockers.clear();
       _resetPath();
+    });
+  }
+
+  void _addRandomBlockers() {
+    setState(() {
+      const int numBlockers = 3;
+      const double minDistance = 30.0; // Minimum distance from cities and other blockers
+      const double margin = 50.0; // Margin from edges
+      
+      // Get canvas size (approximate)
+      double canvasWidth = 400.0; // You might want to get actual canvas size
+      double canvasHeight = 400.0;
+      
+      Random random = Random();
+      int attempts = 0;
+      const int maxAttempts = 100;
+      
+      blockers.clear(); // Clear existing blockers
+      
+      for (int i = 0; i < numBlockers && attempts < maxAttempts; attempts++) {
+        double x = margin + random.nextDouble() * (canvasWidth - 2 * margin);
+        double y = margin + random.nextDouble() * (canvasHeight - 2 * margin);
+        Offset newBlocker = Offset(x, y);
+        
+        bool validPosition = true;
+        
+        // Check distance from cities
+        for (Offset city in cities) {
+          if (_calculateDistance(city, newBlocker) < minDistance) {
+            validPosition = false;
+            break;
+          }
+        }
+        
+        // Check distance from other blockers
+        if (validPosition) {
+          for (Offset blocker in blockers) {
+            if (_calculateDistance(blocker, newBlocker) < minDistance) {
+              validPosition = false;
+              break;
+            }
+          }
+        }
+        
+        if (validPosition) {
+          blockers.add(newBlocker);
+          i++; // Only increment if we successfully placed a blocker
+        }
+      }
+      
+      _resetPath(); // Reset any existing path since blockers might invalidate it
     });
   }
 
   double _calculateDistance(Offset a, Offset b) {
     return sqrt(pow(a.dx - b.dx, 2) + pow(a.dy - b.dy, 2));
+  }
+
+  bool _isValidConnection(Offset start, Offset end) {
+    const double blockerRadius = 8.0; // Same as city radius
+    
+    for (Offset blocker in blockers) {
+      if (_lineIntersectsCircle(start, end, blocker, blockerRadius)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  bool _isValidPath(List<int> testPath) {
+    if (testPath.length < 2) return true;
+    
+    for (int i = 0; i < testPath.length - 1; i++) {
+      if (!_isValidConnection(cities[testPath[i]], cities[testPath[i + 1]])) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  bool _lineIntersectsCircle(Offset lineStart, Offset lineEnd, Offset circleCenter, double radius) {
+    // Calculate the distance from the circle center to the line segment
+    double A = lineEnd.dy - lineStart.dy;
+    double B = lineStart.dx - lineEnd.dx;
+    double C = lineEnd.dx * lineStart.dy - lineStart.dx * lineEnd.dy;
+    
+    double distance = (A * circleCenter.dx + B * circleCenter.dy + C).abs() / sqrt(A * A + B * B);
+    
+    if (distance > radius) return false;
+    
+    // Check if the closest point on the line is within the line segment
+    double t = ((circleCenter.dx - lineStart.dx) * (lineEnd.dx - lineStart.dx) + 
+                (circleCenter.dy - lineStart.dy) * (lineEnd.dy - lineStart.dy)) /
+               (pow(lineEnd.dx - lineStart.dx, 2) + pow(lineEnd.dy - lineStart.dy, 2));
+    
+    t = t.clamp(0.0, 1.0);
+    
+    Offset closestPoint = Offset(
+      lineStart.dx + t * (lineEnd.dx - lineStart.dx),
+      lineStart.dy + t * (lineEnd.dy - lineStart.dy),
+    );
+    
+    return _calculateDistance(circleCenter, closestPoint) <= radius;
   }
 
   double _calculatePathLength(List<int> currentPath) {
@@ -211,7 +349,7 @@ class _TSPHomePageState extends State<TSPHomePage> {
       isManualMode = false;
       isPathClosed = false;
       
-      // Simple nearest neighbor heuristic
+      // Simple nearest neighbor heuristic with blocker avoidance
       List<bool> visited = List.filled(cities.length, false);
       path = [0]; // Start from first city
       visited[0] = true;
@@ -222,7 +360,7 @@ class _TSPHomePageState extends State<TSPHomePage> {
         double minDistance = double.infinity;
 
         for (int j = 0; j < cities.length; j++) {
-          if (!visited[j]) {
+          if (!visited[j] && _isValidConnection(cities[current], cities[j])) {
             double distance = _calculateDistance(cities[current], cities[j]);
             if (distance < minDistance) {
               minDistance = distance;
@@ -234,11 +372,23 @@ class _TSPHomePageState extends State<TSPHomePage> {
         if (nearest != -1) {
           path.add(nearest);
           visited[nearest] = true;
+        } else {
+          // No valid connection found - TSP might not be solvable with current blockers
+          break;
         }
       }
 
-      pathLength = _calculatePathLength(path);
-      showPath = true;
+      // Check if we can complete the tour
+      if (path.length == cities.length && _isValidConnection(cities[path.last], cities[path.first])) {
+        pathLength = _calculatePathLength(path);
+        showPath = true;
+      } else {
+        // Cannot complete tour due to blockers
+        path.clear();
+        showPath = false;
+        pathLength = 0.0;
+        // Show a message or handle this case as needed
+      }
     });
   }
 
@@ -246,7 +396,7 @@ class _TSPHomePageState extends State<TSPHomePage> {
     if (path.length < 4) return;
 
     setState(() {
-      // Simple 2-opt optimization
+      // Simple 2-opt optimization with blocker checking
       bool improved = true;
       while (improved) {
         improved = false;
@@ -262,11 +412,14 @@ class _TSPHomePageState extends State<TSPHomePage> {
               newPath[j - k] = temp;
             }
 
-            double newLength = _calculatePathLength(newPath);
-            if (newLength < pathLength) {
-              path = newPath;
-              pathLength = newLength;
-              improved = true;
+            // Check if new path is valid and better
+            if (_isValidPath(newPath)) {
+              double newLength = _calculatePathLength(newPath);
+              if (newLength < pathLength) {
+                path = newPath;
+                pathLength = newLength;
+                improved = true;
+              }
             }
           }
         }
@@ -278,7 +431,7 @@ class _TSPHomePageState extends State<TSPHomePage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('TSP Solver'),
+        title: Text('TSP Solver with Blockers'),
         backgroundColor: Colors.blue[700],
       ),
       body: Column(
@@ -333,6 +486,24 @@ class _TSPHomePageState extends State<TSPHomePage> {
                   onPressed: _clearCities,
                   icon: Icon(Icons.clear),
                   label: Text('Clear'),
+                ),
+              ],
+            ),
+          ),
+          // Blocker controls
+          Padding(
+            padding: EdgeInsets.symmetric(horizontal: 8),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                ElevatedButton.icon(
+                  onPressed: _addRandomBlockers,
+                  icon: Icon(Icons.block),
+                  label: Text('Add Blockers'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.brown[600],
+                    foregroundColor: Colors.white,
+                  ),
                 ),
               ],
             ),
@@ -426,10 +597,12 @@ class _TSPHomePageState extends State<TSPHomePage> {
                 child: CustomPaint(
                   painter: TSPPainter(
                     cities: cities,
+                    blockers: blockers,
                     path: showPath ? path : [],
                     pathLength: pathLength,
                     currentMode: currentMode,
                     draggedCityIndex: draggedCityIndex,
+                    draggedBlockerIndex: draggedBlockerIndex,
                     isManualMode: isManualMode,
                     manualPath: manualPath,
                     isPathClosed: isPathClosed,
@@ -439,15 +612,28 @@ class _TSPHomePageState extends State<TSPHomePage> {
               ),
             ),
           ),
-          // City count
+          // City and blocker count
           Padding(
             padding: EdgeInsets.all(16),
-            child: Text(
-              'Cities: ${cities.length}',
-              style: TextStyle(
-                fontSize: 16,
-                color: Colors.grey[700],
-              ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  'Cities: ${cities.length}',
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: Colors.grey[700],
+                  ),
+                ),
+                SizedBox(width: 20),
+                Text(
+                  'Blockers: ${blockers.length}',
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: Colors.brown[700],
+                  ),
+                ),
+              ],
             ),
           ),
         ],
@@ -462,6 +648,7 @@ class _TSPHomePageState extends State<TSPHomePage> {
         setState(() {
           currentMode = mode;
           draggedCityIndex = null;
+          draggedBlockerIndex = null;
         });
       },
       child: Container(
@@ -498,7 +685,7 @@ class _TSPHomePageState extends State<TSPHomePage> {
 
   String _getInstructionText() {
     if (isManualMode) {
-      String baseText = 'Click cities in order to build path. Click visited city to retract.';
+      String baseText = 'Click cities in order to build path. Invalid connections blocked.';
       if (manualPath.length >= 3 && !isPathClosed) {
         baseText += ' Click first city again to close path.';
       } else if (isPathClosed) {
@@ -511,9 +698,9 @@ class _TSPHomePageState extends State<TSPHomePage> {
       case InteractionMode.add:
         return 'Tap anywhere to add cities. Need minimum 3 cities to solve TSP.';
       case InteractionMode.delete:
-        return 'Tap on any city to delete it.';
+        return 'Tap on any city or blocker to delete it.';
       case InteractionMode.move:
-        return 'Drag any city to move it. Path length updates in real-time.';
+        return 'Drag any city or blocker to move it. Path length updates in real-time.';
       case InteractionMode.manual:
         return 'Click cities in order to build path manually.';
     }
@@ -522,20 +709,24 @@ class _TSPHomePageState extends State<TSPHomePage> {
 
 class TSPPainter extends CustomPainter {
   final List<Offset> cities;
+  final List<Offset> blockers;
   final List<int> path;
   final double pathLength;
   final InteractionMode currentMode;
   final int? draggedCityIndex;
+  final int? draggedBlockerIndex;
   final bool isManualMode;
   final List<int> manualPath;
   final bool isPathClosed;
 
   TSPPainter({
     required this.cities,
+    required this.blockers,
     required this.path,
     required this.pathLength,
     required this.currentMode,
     this.draggedCityIndex,
+    this.draggedBlockerIndex,
     required this.isManualMode,
     required this.manualPath,
     required this.isPathClosed,
@@ -543,6 +734,64 @@ class TSPPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
+    // Draw blockers first (so they appear behind paths)
+    Paint blockerPaint = Paint()
+      ..color = Colors.brown[600]!
+      ..style = PaintingStyle.fill;
+
+    Paint blockerBorderPaint = Paint()
+      ..color = Colors.brown[900]!
+      ..strokeWidth = 2.0
+      ..style = PaintingStyle.stroke;
+
+    Paint draggedBlockerPaint = Paint()
+      ..color = Colors.brown[400]!
+      ..style = PaintingStyle.fill;
+
+    Paint draggedBlockerBorderPaint = Paint()
+      ..color = Colors.brown[800]!
+      ..strokeWidth = 3.0
+      ..style = PaintingStyle.stroke;
+
+    for (int i = 0; i < blockers.length; i++) {
+      Paint currentBlockerPaint;
+      Paint currentBlockerBorderPaint;
+      double radius = 8;
+
+      if (i == draggedBlockerIndex) {
+        currentBlockerPaint = draggedBlockerPaint;
+        currentBlockerBorderPaint = draggedBlockerBorderPaint;
+        radius = 10;
+      } else {
+        currentBlockerPaint = blockerPaint;
+        currentBlockerBorderPaint = blockerBorderPaint;
+      }
+
+      canvas.drawCircle(blockers[i], radius, currentBlockerPaint);
+      canvas.drawCircle(blockers[i], radius, currentBlockerBorderPaint);
+
+      // Draw "B" text on blockers
+      TextPainter textPainter = TextPainter(
+        text: TextSpan(
+          text: 'B',
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 12,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        textDirection: TextDirection.ltr,
+      );
+      textPainter.layout();
+      textPainter.paint(
+        canvas,
+        Offset(
+          blockers[i].dx - textPainter.width / 2,
+          blockers[i].dy - textPainter.height / 2,
+        ),
+      );
+    }
+
     // Draw path
     if (path.length > 1) {
       Paint pathPaint = Paint()
