@@ -18,7 +18,7 @@ class TSPConstants {
   
   // Layout Constants
   static const double buttonSpacing = 6.0; //8.0;
-  static const double buttonPadding = 10.0; //12.0;
+  static const double buttonPadding = 5.0; //12.0;
   static const double compactButtonPadding = 6.0; //8.0;
   static const double canvasMargin = 12.0;
   static const double controlPanelPadding = 12.0; //16.0;
@@ -997,7 +997,7 @@ class _TSPHomePageState extends State<TSPHomePage> {
       height: TSPConstants.minButtonSize,
       child: ElevatedButton.icon(
         onPressed: onPressed,
-        icon: Icon(icon, size: 20),
+        icon: Icon(icon, size: 18),
         label: Text(
           label,
           style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),

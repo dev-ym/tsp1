@@ -60550,8 +60550,8 @@ n=m.mE(B.bm,B.kr,"Add Cities",!m.ch?m.gPq():l)
 i=A.c([i,new A.f_(new A.aZ(6,6,6,6),s,l),new A.f_(new A.aZ(6,0,6,0),new A.Ez(B.w2,6,6,A.c([q,p,o,n,m.mE(B.EH,B.ks,"Add Blockers",!m.ch?m.gPo():l)],h),l),l)],h)
 if(m.at){s=A.kr(8)
 q=A.a76(B.jG,1)
-i.push(A.kC(A.zC(A.c([A.ih("Manual Mode Active",l,l,l,A.ee(l,l,B.jV,l,l,l,l,l,l,l,l,13,l,l,B.aS,l,l,!0,l,l,l,l,l,l,l,l),l,l),A.fx(l,6,l),A.lH(A.c([m.BF(B.fF,B.j,B.AU,"Reset Path",m.gQb()),A.fx(l,l,6),m.BF(B.bu,B.j,B.AQ,"Exit Manual",m.gRw())],h),B.ao,B.eg,B.aW)],h),B.aG,B.aW),new A.df(B.jS,l,q,s,l,l,B.an),l,l,new A.aZ(6,6,6,6),new A.aZ(10,10,10,10),l))}if(!m.at)i.push(A.kC(A.zC(A.c([A.lH(A.c([m.u4(B.e0,B.kr,"Add"),m.u4(B.kw,B.AP,"Delete"),m.u4(B.hn,B.AT,"Move")],h),B.ao,B.hK,B.aW)],h),B.aG,B.aW),l,l,l,l,new A.aZ(10,10,10,10),l))
-i.push(new A.f_(new A.aZ(10,8,10,8),A.ih(m.S7(),l,l,l,A.ee(l,l,B.bu,l,l,l,l,l,l,l,l,11,l,l,l,l,1.3,!0,l,l,l,l,l,l,l,l),B.eN,l),l))
+i.push(A.kC(A.zC(A.c([A.ih("Manual Mode Active",l,l,l,A.ee(l,l,B.jV,l,l,l,l,l,l,l,l,13,l,l,B.aS,l,l,!0,l,l,l,l,l,l,l,l),l,l),A.fx(l,6,l),A.lH(A.c([m.BF(B.fF,B.j,B.AU,"Reset Path",m.gQb()),A.fx(l,l,6),m.BF(B.bu,B.j,B.AQ,"Exit Manual",m.gRw())],h),B.ao,B.eg,B.aW)],h),B.aG,B.aW),new A.df(B.jS,l,q,s,l,l,B.an),l,l,new A.aZ(6,6,6,6),new A.aZ(5,5,5,5),l))}if(!m.at)i.push(A.kC(A.zC(A.c([A.lH(A.c([m.u4(B.e0,B.kr,"Add"),m.u4(B.kw,B.AP,"Delete"),m.u4(B.hn,B.AT,"Move")],h),B.ao,B.hK,B.aW)],h),B.aG,B.aW),l,l,l,l,new A.aZ(5,5,5,5),l))
+i.push(new A.f_(new A.aZ(5,8,5,8),A.ih(m.S7(),l,l,l,A.ee(l,l,B.bu,l,l,l,l,l,l,l,l,11,l,l,l,l,1.3,!0,l,l,l,l,l,l,l,l),B.eN,l),l))
 s=A.a76(B.cC,2)
 q=A.kr(12)
 j=A.c([new A.b6(2,B.v,A.ay(51,B.bH.v()>>>16&255,B.bH.v()>>>8&255,B.bH.v()&255),new A.m(0,3),5)],j)
@@ -60561,10 +60561,10 @@ n=m.x?m.r:A.c([],t.t)
 i.push(A.ajC(A.kC(A.aar(p,A.PU(l,A.zM(l,l,l,new A.qV(r,o,n,m.y,m.Q,m.as,m.at,m.ax,m.ay,m.ch,l),B.vu),B.aQ,!1,l,l,l,l,l,l,l,m.gTf(),m.gTh(),m.gTj(),l,l,l,l,l,l,m.gTY(),l),B.fr),new A.df(l,l,s,q,j,l,B.an),l,m.d,new A.aZ(12,12,12,12),l,l)))
 h=A.c([m.u6(B.AS,"Cities",B.h.k(r.length),B.cG),m.u6(B.ks,"Blockers",B.h.k(o.length),B.fy)],h)
 if(m.x)h.push(m.u6(B.ku,"Path Steps",B.h.k(J.ct(m.r)),B.cF))
-i.push(A.kC(A.lH(h,B.ao,B.hK,B.aW),new A.df(B.fz,l,new A.cu(new A.bQ(B.fC,1,B.L,-1),B.p,B.p,B.p),l,l,l,B.an),l,l,l,new A.aZ(10,10,10,10),l))
+i.push(A.kC(A.lH(h,B.ao,B.hK,B.aW),new A.df(B.fz,l,new A.cu(new A.bQ(B.fC,1,B.L,-1),B.p,B.p,B.p),l,l,l,B.an),l,l,l,new A.aZ(5,5,5,5),l))
 return new A.tY(new A.pO(k,2,B.dP,new A.I2(l,l,1/0,56),l),A.zC(i,B.aG,B.aW),l)},
 mE(a,b,c,d){var s=null
-return A.fx(A.aaZ(A.rn(b,s,s,20),A.ih(c,s,s,s,A.ee(s,s,s,s,s,s,s,s,s,s,s,14,s,s,B.kn,s,s,!0,s,s,s,s,s,s,s,s),s,s),d,A.ab_(s,s,a.f.i(0,600),s,s,s,2,s,s,B.j,s,s,new A.aZ(10,6,10,6),s,new A.cz(A.kr(8),B.p),s,s,s,s,s)),44,s)},
+return A.fx(A.aaZ(A.rn(b,s,s,18),A.ih(c,s,s,s,A.ee(s,s,s,s,s,s,s,s,s,s,s,14,s,s,B.kn,s,s,!0,s,s,s,s,s,s,s,s),s,s),d,A.ab_(s,s,a.f.i(0,600),s,s,s,2,s,s,B.j,s,s,new A.aZ(5,6,5,6),s,new A.cz(A.kr(8),B.p),s,s,s,s,s)),44,s)},
 BF(a,b,c,d,e){var s=null
 return A.fx(A.aaZ(A.rn(c,s,s,16),A.ih(d,s,s,s,A.ee(s,s,s,s,s,s,s,s,s,s,s,14,s,s,s,s,s,!0,s,s,s,s,s,s,s,s),s,s),e,A.ab_(s,s,a,s,s,s,s,s,s,b,s,s,new A.aZ(12,6,12,6),s,new A.cz(A.kr(6),B.p),s,s,s,s,s)),36,s)},
 u4(a,b,c){var s,r,q,p=null,o=this.y===a,n=o?B.cF:B.jR,m=A.kr(16),l=A.a76(o?B.fI:B.cC,2),k=t.V
