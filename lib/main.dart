@@ -8,8 +8,8 @@ void main() {
 // Constants extracted for better maintainability
 class TSPConstants {
   // Visual Constants
-  static const double cityRadius = 8.0;
-  static const double blockerRadius = 8.0;
+  static const double cityRadius = 12.0;
+  static const double blockerRadius = 12.0;
   static const double tapRadius = 25.0; // Increased for better mobile experience
   static const double dragRadius = 30.0; // Larger drag area
   static const double pathStrokeWidth = 2.5;
@@ -17,11 +17,11 @@ class TSPConstants {
   static const double highlightRadius = 12.0;
   
   // Layout Constants
-  static const double buttonSpacing = 8.0;
-  static const double buttonPadding = 12.0;
-  static const double compactButtonPadding = 8.0;
+  static const double buttonSpacing = 6.0; //8.0;
+  static const double buttonPadding = 10.0; //12.0;
+  static const double compactButtonPadding = 6.0; //8.0;
   static const double canvasMargin = 12.0;
-  static const double controlPanelPadding = 16.0;
+  static const double controlPanelPadding = 12.0; //16.0;
   static const double minButtonSize = 44.0; // iOS/Android minimum touch target
   
   // Algorithm Constants
@@ -33,10 +33,14 @@ class TSPConstants {
   
   // Blocker Constants
   static const int defaultBlockerCount = 3;
+  static const int defaultCitiesCount = 4;
   static const double minDistanceFromCities = 35.0;
   static const double minDistanceBetweenBlockers = 30.0;
+  static const double minDistanceBetweenCities = 30.0;
+  static const double canvasMarginForCities = 25.0;
   static const double canvasMarginForBlockers = 25.0;
   static const int maxBlockerPlacementAttempts = 300;
+  static const int maxCitiesPlacementAttempts = 300;
 }
 
 class TSPApp extends StatelessWidget {
@@ -292,6 +296,56 @@ class _TSPHomePageState extends State<TSPHomePage> {
       
       _resetPath();
     });
+  }
+
+  void _addRandomCities() {
+    setState(() {
+      Random random = Random();
+      int attempts = 0;
+      int addedCities = 0;
+      
+      while (addedCities < TSPConstants.defaultCitiesCount && 
+             attempts < TSPConstants.maxCitiesPlacementAttempts) {
+        attempts++;
+        
+        final RenderBox renderBox = canvasKey.currentContext!.findRenderObject() as RenderBox;
+        final Size size = renderBox.size;
+        
+        double canvasWidth = size.width - 32;
+        double canvasHeight = size.height - 25;
+
+        double x = TSPConstants.canvasMarginForCities + 
+                  random.nextDouble() * (canvasWidth - 2 * TSPConstants.canvasMarginForCities);
+        double y = TSPConstants.canvasMarginForCities + 
+                  random.nextDouble() * (canvasHeight - 2 * TSPConstants.canvasMarginForCities);
+        Offset newCity = Offset(x, y);
+        
+        if (_isValidCityPosition(newCity)) {
+          cities.add(newCity);
+          addedCities++;
+        }
+      }
+      
+      _resetPath();
+    });
+  }
+
+  bool _isValidCityPosition(Offset position) {
+    // Check distance from cities
+    for (Offset city in cities) {
+      if (_calculateDistance(city, position) < TSPConstants.minDistanceBetweenCities) {
+        return false;
+      }
+    }
+    
+    // Check distance from other blockers
+    for (Offset blocker in blockers) {
+      if (_calculateDistance(blocker, position) < TSPConstants.minDistanceFromCities) {
+        return false;
+      }
+    }
+    
+    return true;
   }
 
   bool _isValidBlockerPosition(Offset position) {
@@ -708,14 +762,14 @@ class _TSPHomePageState extends State<TSPHomePage> {
                     ),
                   ],
                 ),
-                SizedBox(height: 8),
-                Text(
-                  'Algorithm: ${_getAlgorithmName(selectedAlgorithm)}',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey[600],
-                  ),
-                ),
+                // SizedBox(height: 8),
+                // Text(
+                //   'Algorithm: ${_getAlgorithmName(selectedAlgorithm)}',
+                //   style: TextStyle(
+                //     fontSize: 12,
+                //     color: Colors.grey[600],
+                //   ),
+                // ),
               ],
             ),
           ),
@@ -758,7 +812,7 @@ class _TSPHomePageState extends State<TSPHomePage> {
                 _buildEnhancedButton(
                   onPressed: cities.length >= 3 && !isSolving ? _solveTSP : null,
                   icon: isSolving ? Icons.hourglass_empty : Icons.route,
-                  label: isSolving ? 'Solving...' : 'Solve',
+                  label: 'Solve',
                   color: Colors.blue,
                 ),
                 _buildEnhancedButton(
@@ -772,6 +826,12 @@ class _TSPHomePageState extends State<TSPHomePage> {
                   icon: Icons.clear,
                   label: 'Clear',
                   color: Colors.red,
+                ),
+                _buildEnhancedButton(
+                  onPressed: !isSolving ? _addRandomCities : null,
+                  icon: Icons.add_location,
+                  label: 'Add Cities',
+                  color: Colors.blue,
                 ),
                 _buildEnhancedButton(
                   onPressed: !isSolving ? _addRandomBlockers : null,
@@ -829,20 +889,11 @@ class _TSPHomePageState extends State<TSPHomePage> {
             ),
           
           // Mode selection with better touch targets
-          if (!isManualMode && !isSolving)
+          if (!isManualMode ) // && !isSolving
             Container(
               padding: EdgeInsets.all(TSPConstants.buttonPadding),
               child: Column(
                 children: [
-                  Text(
-                    'Interaction Mode',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.grey[700],
-                    ),
-                  ),
-                  SizedBox(height: TSPConstants.buttonSpacing),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                     children: [
@@ -949,7 +1000,7 @@ class _TSPHomePageState extends State<TSPHomePage> {
         icon: Icon(icon, size: 20),
         label: Text(
           label,
-          style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
         ),
         style: ElevatedButton.styleFrom(
           backgroundColor: color[600],
@@ -979,7 +1030,7 @@ class _TSPHomePageState extends State<TSPHomePage> {
       child: ElevatedButton.icon(
         onPressed: onPressed,
         icon: Icon(icon, size: 16),
-        label: Text(label, style: TextStyle(fontSize: 9)),
+        label: Text(label, style: TextStyle(fontSize: 14)),
         style: ElevatedButton.styleFrom(
           backgroundColor: backgroundColor,
           foregroundColor: foregroundColor,
@@ -1007,7 +1058,7 @@ class _TSPHomePageState extends State<TSPHomePage> {
         padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         decoration: BoxDecoration(
           color: isSelected ? Colors.blue[600] : Colors.grey[200],
-          borderRadius: BorderRadius.circular(22),
+          borderRadius: BorderRadius.circular(16), //22
           border: Border.all(
             color: isSelected ? Colors.blue[800]! : Colors.grey[400]!,
             width: 2,
@@ -1035,7 +1086,7 @@ class _TSPHomePageState extends State<TSPHomePage> {
               style: TextStyle(
                 color: isSelected ? Colors.white : Colors.grey[700],
                 fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                fontSize: 11,
+                fontSize: 14,
               ),
             ),
           ],
