@@ -5,18 +5,56 @@ void main() {
   runApp(TSPApp());
 }
 
+// Constants extracted for better maintainability
+class TSPConstants {
+  // Visual Constants
+  static const double cityRadius = 8.0;
+  static const double blockerRadius = 8.0;
+  static const double tapRadius = 25.0; // Increased for better mobile experience
+  static const double dragRadius = 30.0; // Larger drag area
+  static const double pathStrokeWidth = 2.5;
+  static const double arrowStrokeWidth = 2.0;
+  static const double highlightRadius = 12.0;
+  
+  // Layout Constants
+  static const double buttonSpacing = 8.0;
+  static const double buttonPadding = 12.0;
+  static const double compactButtonPadding = 8.0;
+  static const double canvasMargin = 12.0;
+  static const double controlPanelPadding = 16.0;
+  static const double minButtonSize = 44.0; // iOS/Android minimum touch target
+  
+  // Algorithm Constants
+  static const int maxOptimizationIterations = 500;
+  static const int geneticAlgorithmPopulation = 30;
+  static const int geneticAlgorithmGenerations = 50;
+  static const double mutationRate = 0.1;
+  static const double crossoverRate = 0.8;
+  
+  // Blocker Constants
+  static const int defaultBlockerCount = 3;
+  static const double minDistanceFromCities = 35.0;
+  static const double minDistanceBetweenBlockers = 30.0;
+  static const double canvasMarginForBlockers = 25.0;
+  static const int maxBlockerPlacementAttempts = 300;
+}
+
 class TSPApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'TSP Solver',
-      theme: ThemeData(primarySwatch: Colors.blue),
+      title: 'Advanced TSP Solver',
+      theme: ThemeData(
+        primarySwatch: Colors.blue,
+        visualDensity: VisualDensity.adaptivePlatformDensity,
+      ),
       home: TSPHomePage(),
     );
   }
 }
 
 enum InteractionMode { add, delete, move, manual }
+enum TSPAlgorithm { nearestNeighbor, genetic, twoOpt }
 
 class TSPHomePage extends StatefulWidget {
   @override
@@ -24,19 +62,24 @@ class TSPHomePage extends StatefulWidget {
 }
 
 class _TSPHomePageState extends State<TSPHomePage> {
+  GlobalKey canvasKey = GlobalKey();
   List<Offset> cities = [];
   List<Offset> blockers = [];
   List<int> path = [];
   double pathLength = 0.0;
   bool showPath = false;
   InteractionMode currentMode = InteractionMode.add;
+  TSPAlgorithm selectedAlgorithm = TSPAlgorithm.nearestNeighbor;
   int? draggedCityIndex;
   int? draggedBlockerIndex;
   bool isManualMode = false;
   List<int> manualPath = [];
   bool isPathClosed = false;
+  bool isSolving = false;
 
   void _handleTap(TapDownDetails details) {
+    if (isSolving) return;
+    
     if (currentMode == InteractionMode.add) {
       _addCity(details);
     } else if (currentMode == InteractionMode.delete) {
@@ -54,13 +97,9 @@ class _TSPHomePageState extends State<TSPHomePage> {
   }
 
   void _deleteCity(Offset tapPosition) {
-    const double tapRadius = 20.0;
-    
     // Check cities first
     for (int i = 0; i < cities.length; i++) {
-      double distance = sqrt(pow(cities[i].dx - tapPosition.dx, 2) + 
-                           pow(cities[i].dy - tapPosition.dy, 2));
-      if (distance <= tapRadius) {
+      if (_isWithinRadius(cities[i], tapPosition, TSPConstants.tapRadius)) {
         setState(() {
           cities.removeAt(i);
           _resetPath();
@@ -71,9 +110,7 @@ class _TSPHomePageState extends State<TSPHomePage> {
     
     // Check blockers
     for (int i = 0; i < blockers.length; i++) {
-      double distance = sqrt(pow(blockers[i].dx - tapPosition.dx, 2) + 
-                           pow(blockers[i].dy - tapPosition.dy, 2));
-      if (distance <= tapRadius) {
+      if (_isWithinRadius(blockers[i], tapPosition, TSPConstants.tapRadius)) {
         setState(() {
           blockers.removeAt(i);
           _resetPath();
@@ -83,42 +120,43 @@ class _TSPHomePageState extends State<TSPHomePage> {
     }
   }
 
+  bool _isWithinRadius(Offset point1, Offset point2, double radius) {
+    return _calculateDistance(point1, point2) <= radius;
+  }
+
   void _handleManualPathBuilding(Offset tapPosition) {
-    const double tapRadius = 20.0;
-    
     for (int i = 0; i < cities.length; i++) {
-      double distance = sqrt(pow(cities[i].dx - tapPosition.dx, 2) + 
-                           pow(cities[i].dy - tapPosition.dy, 2));
-      if (distance <= tapRadius) {
+      if (_isWithinRadius(cities[i], tapPosition, TSPConstants.tapRadius)) {
         setState(() {
           int existingIndex = manualPath.indexOf(i);
           
           if (existingIndex != -1) {
-            // Check if clicking on first city to close the path
+            // Handle clicking on existing city in path
             if (i == manualPath.first && manualPath.length == cities.length && !isPathClosed) {
-              // Check if closing path is valid (no blockers crossed) and all cities are included
+              // Try to close the path
               if (_isValidPath([...manualPath, manualPath.first])) {
                 isPathClosed = true;
+                path = List.from(manualPath);
                 pathLength = _calculatePathLength(path);
               }
             } else if (isPathClosed && i == manualPath.first) {
-              // Reopen the path if clicking first city again when closed
+              // Reopen the path
               isPathClosed = false;
-              pathLength = _calculatePathLength(path);
+              pathLength = _calculatePathLength(manualPath);
             } else {
-              // City already in path - retract to this point
+              // Retract to this point
               manualPath = manualPath.sublist(0, existingIndex + 1);
               path = List.from(manualPath);
-              isPathClosed = false; // Reopen path when retracting
-              pathLength = _calculatePathLength(path);
+              isPathClosed = false;
+              pathLength = _calculatePathLength(manualPath);
             }
           } else {
-            // Add city to path - check if connection is valid
+            // Add new city to path
             if (manualPath.isEmpty || _isValidConnection(cities[manualPath.last], cities[i])) {
               manualPath.add(i);
               path = List.from(manualPath);
-              isPathClosed = false; // Adding new city reopens path
-              pathLength = _calculatePathLength(path);
+              isPathClosed = false;
+              pathLength = _calculatePathLength(manualPath);
             }
           }
           
@@ -161,15 +199,11 @@ class _TSPHomePageState extends State<TSPHomePage> {
   }
 
   void _handlePanStart(DragStartDetails details) {
-    if (currentMode != InteractionMode.move) return;
-    
-    const double tapRadius = 20.0;
+    if (currentMode != InteractionMode.move || isSolving) return;
     
     // Check cities first
     for (int i = 0; i < cities.length; i++) {
-      double distance = sqrt(pow(cities[i].dx - details.localPosition.dx, 2) + 
-                           pow(cities[i].dy - details.localPosition.dy, 2));
-      if (distance <= tapRadius) {
+      if (_isWithinRadius(cities[i], details.localPosition, TSPConstants.dragRadius)) {
         draggedCityIndex = i;
         return;
       }
@@ -177,9 +211,7 @@ class _TSPHomePageState extends State<TSPHomePage> {
     
     // Check blockers
     for (int i = 0; i < blockers.length; i++) {
-      double distance = sqrt(pow(blockers[i].dx - details.localPosition.dx, 2) + 
-                           pow(blockers[i].dy - details.localPosition.dy, 2));
-      if (distance <= tapRadius) {
+      if (_isWithinRadius(blockers[i], details.localPosition, TSPConstants.dragRadius)) {
         draggedBlockerIndex = i;
         return;
       }
@@ -187,7 +219,7 @@ class _TSPHomePageState extends State<TSPHomePage> {
   }
 
   void _handlePanUpdate(DragUpdateDetails details) {
-    if (currentMode != InteractionMode.move) return;
+    if (currentMode != InteractionMode.move || isSolving) return;
     
     setState(() {
       if (draggedCityIndex != null) {
@@ -195,7 +227,8 @@ class _TSPHomePageState extends State<TSPHomePage> {
         if (showPath) {
           pathLength = _calculatePathLength(path);
         }
-      } else if (draggedBlockerIndex != null) {
+      }
+      if (draggedBlockerIndex != null) {
         blockers[draggedBlockerIndex!] = details.localPosition;
         if (showPath) {
           pathLength = _calculatePathLength(path);
@@ -228,53 +261,55 @@ class _TSPHomePageState extends State<TSPHomePage> {
 
   void _addRandomBlockers() {
     setState(() {
-      const int numBlockers = 3;
-      const double minDistance = 30.0; // Minimum distance from cities and other blockers
-      const double margin = 20.0; // Margin from edges
-      
       Random random = Random();
       int attempts = 0;
-      const int maxAttempts = 200;
+      int addedBlockers = 0;
       
-      // Don't clear existing blockers - add to them instead
-      
-      for (int i = 0; i < numBlockers && attempts < maxAttempts; attempts++) {
-        // Use conservative canvas size to ensure visibility
-        double canvasWidth = 350.0;  // Reduced to be more conservative
-        double canvasHeight = 250.0; // Reduced to be more conservative
+      while (addedBlockers < TSPConstants.defaultBlockerCount && 
+             attempts < TSPConstants.maxBlockerPlacementAttempts) {
+        attempts++;
         
-        double x = margin + random.nextDouble() * (canvasWidth - 2 * margin);
-        double y = margin + random.nextDouble() * (canvasHeight - 2 * margin);
+        // // Use conservative canvas size
+        // double canvasWidth = 320.0;
+        // double canvasHeight = 240.0;
+        final RenderBox renderBox = canvasKey.currentContext!.findRenderObject() as RenderBox;
+        final Size size = renderBox.size;
+        
+        double canvasWidth = size.width - 32;
+        double canvasHeight = size.height - 25;
+
+        double x = TSPConstants.canvasMarginForBlockers + 
+                  random.nextDouble() * (canvasWidth - 2 * TSPConstants.canvasMarginForBlockers);
+        double y = TSPConstants.canvasMarginForBlockers + 
+                  random.nextDouble() * (canvasHeight - 2 * TSPConstants.canvasMarginForBlockers);
         Offset newBlocker = Offset(x, y);
         
-        bool validPosition = true;
-        
-        // Check distance from cities
-        for (Offset city in cities) {
-          if (_calculateDistance(city, newBlocker) < minDistance) {
-            validPosition = false;
-            break;
-          }
-        }
-        
-        // Check distance from other blockers
-        if (validPosition) {
-          for (Offset blocker in blockers) {
-            if (_calculateDistance(blocker, newBlocker) < minDistance) {
-              validPosition = false;
-              break;
-            }
-          }
-        }
-        
-        if (validPosition) {
+        if (_isValidBlockerPosition(newBlocker)) {
           blockers.add(newBlocker);
-          i++; // Only increment if we successfully placed a blocker
+          addedBlockers++;
         }
       }
       
-      _resetPath(); // Reset any existing path since blockers might invalidate it
+      _resetPath();
     });
+  }
+
+  bool _isValidBlockerPosition(Offset position) {
+    // Check distance from cities
+    for (Offset city in cities) {
+      if (_calculateDistance(city, position) < TSPConstants.minDistanceFromCities) {
+        return false;
+      }
+    }
+    
+    // Check distance from other blockers
+    for (Offset blocker in blockers) {
+      if (_calculateDistance(blocker, position) < TSPConstants.minDistanceBetweenBlockers) {
+        return false;
+      }
+    }
+    
+    return true;
   }
 
   double _calculateDistance(Offset a, Offset b) {
@@ -282,10 +317,8 @@ class _TSPHomePageState extends State<TSPHomePage> {
   }
 
   bool _isValidConnection(Offset start, Offset end) {
-    const double blockerRadius = 8.0; // Same as city radius
-    
     for (Offset blocker in blockers) {
-      if (_lineIntersectsCircle(start, end, blocker, blockerRadius)) {
+      if (_lineIntersectsCircle(start, end, blocker, TSPConstants.blockerRadius)) {
         return false;
       }
     }
@@ -304,7 +337,6 @@ class _TSPHomePageState extends State<TSPHomePage> {
   }
 
   bool _lineIntersectsCircle(Offset lineStart, Offset lineEnd, Offset circleCenter, double radius) {
-    // Calculate the distance from the circle center to the line segment
     double A = lineEnd.dy - lineStart.dy;
     double B = lineStart.dx - lineEnd.dx;
     double C = lineEnd.dx * lineStart.dy - lineStart.dx * lineEnd.dy;
@@ -313,7 +345,6 @@ class _TSPHomePageState extends State<TSPHomePage> {
     
     if (distance > radius) return false;
     
-    // Check if the closest point on the line is within the line segment
     double t = ((circleCenter.dx - lineStart.dx) * (lineEnd.dx - lineStart.dx) + 
                 (circleCenter.dy - lineStart.dy) * (lineEnd.dy - lineStart.dy)) /
                (pow(lineEnd.dx - lineStart.dx, 2) + pow(lineEnd.dy - lineStart.dy, 2));
@@ -335,226 +366,485 @@ class _TSPHomePageState extends State<TSPHomePage> {
     for (int i = 0; i < currentPath.length - 1; i++) {
       length += _calculateDistance(cities[currentPath[i]], cities[currentPath[i + 1]]);
     }
-    // Add distance back to start to complete the tour
+    
+    // Add distance back to start if path should be closed
     if (currentPath.length > 2 && (!isManualMode || isPathClosed)) {
       length += _calculateDistance(cities[currentPath.last], cities[currentPath.first]);
     }
     return length;
   }
 
-  void _solveTSP() {
-    if (cities.length < 3) return;
+  // Enhanced TSP Solver with multiple algorithms
+  Future<void> _solveTSP() async {
+    if (cities.length < 3 || isSolving) return;
 
     setState(() {
+      isSolving = true;
       isManualMode = false;
       isPathClosed = false;
+    });
+
+    try {
+      List<int>? solution;
       
-      // Simple nearest neighbor heuristic with blocker avoidance
-      List<bool> visited = List.filled(cities.length, false);
-      path = [0]; // Start from first city
-      visited[0] = true;
-
-      for (int i = 0; i < cities.length - 1; i++) {
-        int current = path.last;
-        int nearest = -1;
-        double minDistance = double.infinity;
-
-        for (int j = 0; j < cities.length; j++) {
-          if (!visited[j] && _isValidConnection(cities[current], cities[j])) {
-            double distance = _calculateDistance(cities[current], cities[j]);
-            if (distance < minDistance) {
-              minDistance = distance;
-              nearest = j;
-            }
-          }
-        }
-
-        if (nearest != -1) {
-          path.add(nearest);
-          visited[nearest] = true;
-        } else {
-          // No valid connection found - TSP might not be solvable with current blockers
+      switch (selectedAlgorithm) {
+        case TSPAlgorithm.nearestNeighbor:
+          solution = await _solveNearestNeighbor();
           break;
-        }
+        case TSPAlgorithm.genetic:
+          solution = await _solveGeneticAlgorithm();
+          break;
+        case TSPAlgorithm.twoOpt:
+          solution = await _solveTwoOpt();
+          break;
       }
 
-      // Check if we can complete the tour
-      if (path.length == cities.length && _isValidConnection(cities[path.last], cities[path.first])) {
-        pathLength = _calculatePathLength(path);
-        showPath = true;
-      } else {
-        // Cannot complete tour due to blockers
+      setState(() {
+        if (solution != null && solution.length == cities.length) {
+          // Verify the solution is valid with blockers
+          if (_isValidPath([...solution, solution.first])) {
+            path = solution;
+            pathLength = _calculatePathLength(path);
+            showPath = true;
+          } else {
+            // Clear if invalid
+            path.clear();
+            showPath = false;
+            pathLength = 0.0;
+          }
+        } else {
+          path.clear();
+          showPath = false;
+          pathLength = 0.0;
+        }
+        isSolving = false;
+      });
+    } catch (e) {
+      setState(() {
+        isSolving = false;
         path.clear();
         showPath = false;
         pathLength = 0.0;
-        // Show a message or handle this case as needed
-      }
-    });
+      });
+    }
   }
 
-  void _optimizePath() {
-    if (path.length < 4) return;
+  Future<List<int>?> _solveNearestNeighbor() async {
+    await Future.delayed(Duration(milliseconds: 100));
+    
+    List<bool> visited = List.filled(cities.length, false);
+    List<int> solution = [0];
+    visited[0] = true;
 
-    setState(() {
-      // Simple 2-opt optimization with blocker checking
-      bool improved = true;
-      while (improved) {
-        improved = false;
-        for (int i = 1; i < path.length - 2; i++) {
-          for (int j = i + 1; j < path.length; j++) {
-            if (j - i == 1) continue;
+    for (int i = 0; i < cities.length - 1; i++) {
+      int current = solution.last;
+      int nearest = -1;
+      double minDistance = double.infinity;
 
-            List<int> newPath = List.from(path);
-            // Reverse the segment between i and j
-            for (int k = 0; k < (j - i + 1) / 2; k++) {
-              int temp = newPath[i + k];
-              newPath[i + k] = newPath[j - k];
-              newPath[j - k] = temp;
-            }
+      for (int j = 0; j < cities.length; j++) {
+        if (!visited[j] && _isValidConnection(cities[current], cities[j])) {
+          double distance = _calculateDistance(cities[current], cities[j]);
+          if (distance < minDistance) {
+            minDistance = distance;
+            nearest = j;
+          }
+        }
+      }
 
-            // Check if new path is valid and better
-            if (_isValidPath(newPath)) {
-              double newLength = _calculatePathLength(newPath);
-              if (newLength < pathLength) {
-                path = newPath;
-                pathLength = newLength;
-                improved = true;
-              }
+      if (nearest != -1) {
+        solution.add(nearest);
+        visited[nearest] = true;
+      } else {
+        return null; // Cannot complete tour
+      }
+    }
+
+    // Check if we can complete the tour
+    if (_isValidConnection(cities[solution.last], cities[solution.first])) {
+      return solution;
+    } else {
+      return null;
+    }
+  }
+
+  Future<List<int>?> _solveTwoOpt() async {
+    // Start with nearest neighbor, then improve with 2-opt
+    List<int>? initialSolution = await _solveNearestNeighbor();
+    if (initialSolution == null) return null;
+
+    await Future.delayed(Duration(milliseconds: 200));
+    
+    List<int> currentSolution = List.from(initialSolution);
+    double currentLength = _calculatePathLength(currentSolution);
+    bool improved = true;
+    int iterations = 0;
+
+    while (improved && iterations < TSPConstants.maxOptimizationIterations) {
+      improved = false;
+      iterations++;
+
+      for (int i = 1; i < currentSolution.length - 1; i++) {
+        for (int j = i + 1; j < currentSolution.length; j++) {
+          if (j - i == 1) continue;
+
+          // Create new path with 2-opt swap
+          List<int> newSolution = List.from(currentSolution);
+          _reverse(newSolution, i, j);
+
+          // Check if new path is valid and better
+          if (_isValidPath([...newSolution, newSolution.first])) {
+            double newLength = _calculatePathLength(newSolution);
+            if (newLength < currentLength) {
+              currentSolution = newSolution;
+              currentLength = newLength;
+              improved = true;
             }
           }
         }
       }
-    });
+    }
+
+    return currentSolution;
+  }
+
+  void _reverse(List<int> path, int start, int end) {
+    while (start < end) {
+      int temp = path[start];
+      path[start] = path[end];
+      path[end] = temp;
+      start++;
+      end--;
+    }
+  }
+
+  Future<List<int>?> _solveGeneticAlgorithm() async {
+    await Future.delayed(Duration(milliseconds: 300));
+    
+    Random random = Random();
+    
+    // Generate initial population
+    List<List<int>> population = [];
+    for (int i = 0; i < TSPConstants.geneticAlgorithmPopulation; i++) {
+      List<int> individual = List.generate(cities.length, (index) => index);
+      // Keep first city fixed, shuffle the rest
+      individual.sublist(1).shuffle(random);
+      population.add(individual);
+    }
+
+    for (int generation = 0; generation < TSPConstants.geneticAlgorithmGenerations; generation++) {
+      // Evaluate fitness (shorter paths are better, so use 1/distance)
+      List<double> fitness = population.map((individual) {
+        if (_isValidPath([...individual, individual.first])) {
+          double length = _calculatePathLength(individual);
+          return length > 0 ? 1.0 / length : 0.0;
+        } else {
+          return 0.0; // Invalid paths get zero fitness
+        }
+      }).toList();
+
+      // Selection and breeding
+      List<List<int>> newPopulation = [];
+      
+      // Elitism - keep best individual
+      int bestIndex = 0;
+      double bestFitness = fitness[0];
+      for (int i = 1; i < fitness.length; i++) {
+        if (fitness[i] > bestFitness) {
+          bestFitness = fitness[i];
+          bestIndex = i;
+        }
+      }
+      
+      if (bestFitness > 0) {
+        newPopulation.add(List.from(population[bestIndex]));
+      }
+
+      while (newPopulation.length < TSPConstants.geneticAlgorithmPopulation) {
+        // Tournament selection
+        List<int> parent1 = _tournamentSelection(population, fitness, random);
+        List<int> parent2 = _tournamentSelection(population, fitness, random);
+
+        // Crossover
+        List<int> child = random.nextDouble() < TSPConstants.crossoverRate
+            ? _orderCrossover(parent1, parent2, random)
+            : List.from(parent1);
+
+        // Mutation
+        if (random.nextDouble() < TSPConstants.mutationRate) {
+          _mutate(child, random);
+        }
+
+        newPopulation.add(child);
+      }
+
+      population = newPopulation;
+    }
+
+    // Return best solution
+    List<double> finalFitness = population.map((individual) {
+      if (_isValidPath([...individual, individual.first])) {
+        double length = _calculatePathLength(individual);
+        return length > 0 ? 1.0 / length : 0.0;
+      } else {
+        return 0.0;
+      }
+    }).toList();
+
+    int bestIndex = 0;
+    double bestFitness = finalFitness[0];
+    for (int i = 1; i < finalFitness.length; i++) {
+      if (finalFitness[i] > bestFitness) {
+        bestFitness = finalFitness[i];
+        bestIndex = i;
+      }
+    }
+
+    return bestFitness > 0 ? population[bestIndex] : null;
+  }
+
+  List<int> _tournamentSelection(List<List<int>> population, List<double> fitness, Random random) {
+    int tournamentSize = 3;
+    List<int> bestIndividual = population[0];
+    double bestFitness = fitness[0];
+
+    for (int i = 0; i < tournamentSize; i++) {
+      int randomIndex = random.nextInt(population.length);
+      if (fitness[randomIndex] > bestFitness) {
+        bestIndividual = population[randomIndex];
+        bestFitness = fitness[randomIndex];
+      }
+    }
+
+    return List.from(bestIndividual);
+  }
+
+  List<int> _orderCrossover(List<int> parent1, List<int> parent2, Random random) {
+    int length = parent1.length;
+    List<int> child = List.filled(length, -1);
+    
+    // Select a random segment from parent1
+    int start = random.nextInt(length);
+    int end = random.nextInt(length);
+    if (start > end) {
+      int temp = start;
+      start = end;
+      end = temp;
+    }
+
+    // Copy segment from parent1
+    for (int i = start; i <= end; i++) {
+      child[i] = parent1[i];
+    }
+
+    // Fill remaining positions with cities from parent2 in order
+    Set<int> used = Set.from(child.where((x) => x != -1));
+    int childIndex = 0;
+    
+    for (int i = 0; i < length; i++) {
+      if (!used.contains(parent2[i])) {
+        while (childIndex < length && child[childIndex] != -1) {
+          childIndex++;
+        }
+        if (childIndex < length) {
+          child[childIndex] = parent2[i];
+        }
+      }
+    }
+
+    return child;
+  }
+
+  void _mutate(List<int> individual, Random random) {
+    if (individual.length < 3) return;
+    
+    // Swap mutation (avoid swapping the first city)
+    int index1 = 1 + random.nextInt(individual.length - 1);
+    int index2 = 1 + random.nextInt(individual.length - 1);
+    
+    int temp = individual[index1];
+    individual[index1] = individual[index2];
+    individual[index2] = temp;
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('TSP Solver with Blockers'),
+        title: Text('Advanced TSP Solver'),
         backgroundColor: Colors.blue[700],
+        elevation: 2,
       ),
       body: Column(
         children: [
-          // Path length display
+          // Path length and algorithm display
           Container(
             width: double.infinity,
-            padding: EdgeInsets.all(16),
-            color: Colors.grey[100],
+            padding: EdgeInsets.all(TSPConstants.controlPanelPadding),
+            decoration: BoxDecoration(
+              color: Colors.grey[100],
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.grey.withOpacity(0.3),
+                  spreadRadius: 1,
+                  blurRadius: 3,
+                  offset: Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Column(
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.straighten, color: Colors.blue[700]),
+                    SizedBox(width: TSPConstants.buttonSpacing),
+                    Text(
+                      'Path Length: ${pathLength.toStringAsFixed(1)}',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.blue[700],
+                      ),
+                    ),
+                  ],
+                ),
+                SizedBox(height: 8),
+                Text(
+                  'Algorithm: ${_getAlgorithmName(selectedAlgorithm)}',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey[600],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          
+          // Algorithm selector
+          Padding(
+            padding: EdgeInsets.all(TSPConstants.compactButtonPadding),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(Icons.straighten, color: Colors.blue[700]),
-                SizedBox(width: 8),
-                Text(
-                  'Path Length: ${pathLength.toStringAsFixed(1)}',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.blue[700],
-                  ),
+                Text('Algorithm: ', style: TextStyle(fontWeight: FontWeight.bold)),
+                DropdownButton<TSPAlgorithm>(
+                  value: selectedAlgorithm,
+                  onChanged: isSolving ? null : (TSPAlgorithm? newValue) {
+                    if (newValue != null) {
+                      setState(() {
+                        selectedAlgorithm = newValue;
+                      });
+                    }
+                  },
+                  items: TSPAlgorithm.values.map((TSPAlgorithm algorithm) {
+                    return DropdownMenuItem<TSPAlgorithm>(
+                      value: algorithm,
+                      child: Text(_getAlgorithmName(algorithm)),
+                    );
+                  }).toList(),
                 ),
               ],
             ),
           ),
-          // Control buttons - compressed for mobile
+          
+          // Main control buttons with better spacing
           Padding(
-            padding: EdgeInsets.all(4),
+            padding: EdgeInsets.symmetric(horizontal: TSPConstants.buttonSpacing),
             child: Wrap(
-              spacing: 4,
-              runSpacing: 4,
+              spacing: TSPConstants.buttonSpacing,
+              runSpacing: TSPConstants.buttonSpacing,
               alignment: WrapAlignment.center,
               children: [
-                _buildCompactButton(
-                  onPressed: cities.length >= 3 ? _solveTSP : null,
-                  icon: Icons.route,
-                  label: 'Solve',
+                _buildEnhancedButton(
+                  onPressed: cities.length >= 3 && !isSolving ? _solveTSP : null,
+                  icon: isSolving ? Icons.hourglass_empty : Icons.route,
+                  label: isSolving ? 'Solving...' : 'Solve',
+                  color: Colors.blue,
                 ),
-                _buildCompactButton(
-                  onPressed: showPath && path.length >= 4 ? _optimizePath : null,
-                  icon: Icons.trending_up,
-                  label: 'Optimize',
-                ),
-                _buildCompactButton(
-                  onPressed: cities.length >= 2 ? _startManualMode : null,
+                _buildEnhancedButton(
+                  onPressed: cities.length >= 2 && !isSolving ? _startManualMode : null,
                   icon: Icons.touch_app,
                   label: 'Manual',
-                  backgroundColor: isManualMode ? Colors.purple[600] : null,
-                  foregroundColor: isManualMode ? Colors.white : null,
+                  color: isManualMode ? Colors.purple : Colors.grey,
                 ),
-                _buildCompactButton(
-                  onPressed: _clearCities,
+                _buildEnhancedButton(
+                  onPressed: !isSolving ? _clearCities : null,
                   icon: Icons.clear,
                   label: 'Clear',
+                  color: Colors.red,
+                ),
+                _buildEnhancedButton(
+                  onPressed: !isSolving ? _addRandomBlockers : null,
+                  icon: Icons.block,
+                  label: 'Add Blockers',
+                  color: Colors.brown,
                 ),
               ],
             ),
           ),
-          // Blocker controls - compressed
-          Padding(
-            padding: EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-            child: _buildCompactButton(
-              onPressed: _addRandomBlockers,
-              icon: Icons.block,
-              label: 'Add Blockers',
-              backgroundColor: Colors.brown[600],
-              foregroundColor: Colors.white,
-            ),
-          ),
-          // Manual mode controls - compressed
+          
+          // Manual mode controls with improved spacing
           if (isManualMode)
             Container(
-              padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              color: Colors.purple[50],
-              child: Wrap(
-                spacing: 4,
-                alignment: WrapAlignment.center,
+              margin: EdgeInsets.all(TSPConstants.compactButtonPadding),
+              padding: EdgeInsets.all(TSPConstants.buttonPadding),
+              decoration: BoxDecoration(
+                color: Colors.purple[50],
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.purple[200]!),
+              ),
+              child: Column(
                 children: [
                   Text(
-                    'Manual Mode',
+                    'Manual Mode Active',
                     style: TextStyle(
                       fontWeight: FontWeight.bold,
                       color: Colors.purple[700],
-                      fontSize: 14,
+                      fontSize: 13,
                     ),
                   ),
-                  _buildCompactButton(
-                    onPressed: _clearManualPath,
-                    icon: Icons.refresh,
-                    label: 'Reset',
-                    backgroundColor: Colors.orange[600],
-                    foregroundColor: Colors.white,
-                    isSmall: true,
-                  ),
-                  _buildCompactButton(
-                    onPressed: _exitManualMode,
-                    icon: Icons.exit_to_app,
-                    label: 'Exit',
-                    backgroundColor: Colors.grey[600],
-                    foregroundColor: Colors.white,
-                    isSmall: true,
+                  SizedBox(height: TSPConstants.buttonSpacing),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      _buildCompactButton(
+                        onPressed: _clearManualPath,
+                        icon: Icons.refresh,
+                        label: 'Reset Path',
+                        backgroundColor: Colors.orange[600],
+                        foregroundColor: Colors.white,
+                      ),
+                      SizedBox(width: TSPConstants.buttonSpacing),
+                      _buildCompactButton(
+                        onPressed: _exitManualMode,
+                        icon: Icons.exit_to_app,
+                        label: 'Exit Manual',
+                        backgroundColor: Colors.grey[600],
+                        foregroundColor: Colors.white,
+                      ),
+                    ],
                   ),
                 ],
               ),
             ),
-          // Mode selection - compressed
-          if (!isManualMode)
+          
+          // Mode selection with better touch targets
+          if (!isManualMode && !isSolving)
             Container(
-              padding: EdgeInsets.all(8),
+              padding: EdgeInsets.all(TSPConstants.buttonPadding),
               child: Column(
                 children: [
                   Text(
-                    'Mode:',
+                    'Interaction Mode',
                     style: TextStyle(
-                      fontSize: 14,
+                      fontSize: 12,
                       fontWeight: FontWeight.bold,
                       color: Colors.grey[700],
                     ),
                   ),
-                  SizedBox(height: 4),
-                  Wrap(
-                    spacing: 4,
-                    alignment: WrapAlignment.center,
+                  SizedBox(height: TSPConstants.buttonSpacing),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                     children: [
                       _buildModeButton(InteractionMode.add, Icons.add_location, 'Add'),
                       _buildModeButton(InteractionMode.delete, Icons.delete_outline, 'Delete'),
@@ -564,71 +854,115 @@ class _TSPHomePageState extends State<TSPHomePage> {
                 ],
               ),
             ),
-          // Instructions - compressed
+          
+          // Instructions with better typography
           Padding(
-            padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            padding: EdgeInsets.symmetric(horizontal: TSPConstants.buttonPadding, vertical: 8),
             child: Text(
               _getInstructionText(),
-              style: TextStyle(color: Colors.grey[600], fontSize: 12),
+              style: TextStyle(
+                color: Colors.grey[600], 
+                fontSize: 11,
+                height: 1.3,
+              ),
               textAlign: TextAlign.center,
             ),
           ),
-          // Drawing canvas
+          
+          // Drawing canvas with better margins
           Expanded(
             child: Container(
-              margin: EdgeInsets.all(8),
+              key: canvasKey,
+              margin: EdgeInsets.all(TSPConstants.canvasMargin),
               decoration: BoxDecoration(
-                border: Border.all(color: Colors.grey),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: GestureDetector(
-                onTapDown: _handleTap,
-                onPanStart: _handlePanStart,
-                onPanUpdate: _handlePanUpdate,
-                onPanEnd: _handlePanEnd,
-                child: CustomPaint(
-                  painter: TSPPainter(
-                    cities: cities,
-                    blockers: blockers,
-                    path: showPath ? path : [],
-                    pathLength: pathLength,
-                    currentMode: currentMode,
-                    draggedCityIndex: draggedCityIndex,
-                    draggedBlockerIndex: draggedBlockerIndex,
-                    isManualMode: isManualMode,
-                    manualPath: manualPath,
-                    isPathClosed: isPathClosed,
+                border: Border.all(color: Colors.grey[400]!, width: 2),
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.grey.withOpacity(0.2),
+                    spreadRadius: 2,
+                    blurRadius: 5,
+                    offset: Offset(0, 3),
                   ),
-                  size: Size.infinite,
+                ],
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(10),
+                child: GestureDetector(
+                  onTapDown: _handleTap,
+                  onPanStart: _handlePanStart,
+                  onPanUpdate: _handlePanUpdate,
+                  onPanEnd: _handlePanEnd,
+                  child: CustomPaint(
+                    painter: EnhancedTSPPainter(
+                      cities: cities,
+                      blockers: blockers,
+                      path: showPath ? path : [],
+                      pathLength: pathLength,
+                      currentMode: currentMode,
+                      draggedCityIndex: draggedCityIndex,
+                      draggedBlockerIndex: draggedBlockerIndex,
+                      isManualMode: isManualMode,
+                      manualPath: manualPath,
+                      isPathClosed: isPathClosed,
+                      isSolving: isSolving,
+                    ),
+                    size: Size.infinite,
+                  ),
                 ),
               ),
             ),
           ),
-          // City and blocker count - compressed
-          Padding(
-            padding: EdgeInsets.all(8),
+          
+          // Status bar with counts and better spacing
+          Container(
+            padding: EdgeInsets.all(TSPConstants.buttonPadding),
+            decoration: BoxDecoration(
+              color: Colors.grey[50],
+              border: Border(top: BorderSide(color: Colors.grey[300]!)),
+            ),
             child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
-                Text(
-                  'Cities: ${cities.length}',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Colors.grey[700],
-                  ),
-                ),
-                SizedBox(width: 16),
-                Text(
-                  'Blockers: ${blockers.length}',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Colors.brown[700],
-                  ),
-                ),
+                _buildStatusItem(Icons.location_city, 'Cities', cities.length.toString(), Colors.red[600]!),
+                _buildStatusItem(Icons.block, 'Blockers', blockers.length.toString(), Colors.brown[600]!),
+                if (showPath)
+                  _buildStatusItem(Icons.route, 'Path Steps', path.length.toString(), Colors.blue[600]!),
               ],
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildEnhancedButton({
+    required VoidCallback? onPressed,
+    required IconData icon,
+    required String label,
+    required MaterialColor color,
+  }) {
+    return SizedBox(
+      height: TSPConstants.minButtonSize,
+      child: ElevatedButton.icon(
+        onPressed: onPressed,
+        icon: Icon(icon, size: 20),
+        label: Text(
+          label,
+          style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+        ),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: color[600],
+          foregroundColor: Colors.white,
+          padding: EdgeInsets.symmetric(
+            horizontal: TSPConstants.buttonPadding,
+            vertical: TSPConstants.compactButtonPadding,
+          ),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(8),
+          ),
+          elevation: 2,
+        ),
       ),
     );
   }
@@ -639,20 +973,21 @@ class _TSPHomePageState extends State<TSPHomePage> {
     required String label,
     Color? backgroundColor,
     Color? foregroundColor,
-    bool isSmall = false,
   }) {
-    return ElevatedButton.icon(
-      onPressed: onPressed,
-      icon: Icon(icon, size: isSmall ? 14 : 16),
-      label: Text(label, style: TextStyle(fontSize: isSmall ? 11 : 12)),
-      style: ElevatedButton.styleFrom(
-        backgroundColor: backgroundColor,
-        foregroundColor: foregroundColor,
-        padding: EdgeInsets.symmetric(
-          horizontal: isSmall ? 6 : 8, 
-          vertical: isSmall ? 4 : 6
+    return SizedBox(
+      height: 36,
+      child: ElevatedButton.icon(
+        onPressed: onPressed,
+        icon: Icon(icon, size: 16),
+        label: Text(label, style: TextStyle(fontSize: 9)),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: backgroundColor,
+          foregroundColor: foregroundColor,
+          padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(6),
+          ),
         ),
-        minimumSize: Size(0, isSmall ? 28 : 32),
       ),
     );
   }
@@ -668,14 +1003,23 @@ class _TSPHomePageState extends State<TSPHomePage> {
         });
       },
       child: Container(
-        padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        height: TSPConstants.minButtonSize,
+        padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         decoration: BoxDecoration(
           color: isSelected ? Colors.blue[600] : Colors.grey[200],
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(22),
           border: Border.all(
             color: isSelected ? Colors.blue[800]! : Colors.grey[400]!,
-            width: 1,
+            width: 2,
           ),
+          boxShadow: isSelected ? [
+            BoxShadow(
+              color: Colors.blue.withOpacity(0.3),
+              spreadRadius: 1,
+              blurRadius: 3,
+              offset: Offset(0, 2),
+            ),
+          ] : [],
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -683,15 +1027,15 @@ class _TSPHomePageState extends State<TSPHomePage> {
             Icon(
               icon,
               color: isSelected ? Colors.white : Colors.grey[700],
-              size: 16,
+              size: 20,
             ),
-            SizedBox(width: 2),
+            SizedBox(width: 6),
             Text(
               label,
               style: TextStyle(
                 color: isSelected ? Colors.white : Colors.grey[700],
                 fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                fontSize: 12,
+                fontSize: 11,
               ),
             ),
           ],
@@ -700,33 +1044,66 @@ class _TSPHomePageState extends State<TSPHomePage> {
     );
   }
 
+  Widget _buildStatusItem(IconData icon, String label, String value, Color color) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, color: color, size: 20),
+        SizedBox(height: 2),
+        Text(
+          '$label: $value',
+          style: TextStyle(
+            fontSize: 10,
+            color: color,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      ],
+    );
+  }
+
+  String _getAlgorithmName(TSPAlgorithm algorithm) {
+    switch (algorithm) {
+      case TSPAlgorithm.nearestNeighbor:
+        return 'Nearest Neighbor';
+      case TSPAlgorithm.genetic:
+        return 'Genetic Algorithm';
+      case TSPAlgorithm.twoOpt:
+        return '2-Opt Optimization';
+    }
+  }
+
   String _getInstructionText() {
+    if (isSolving) {
+      return 'Solving TSP with ${_getAlgorithmName(selectedAlgorithm)}...';
+    }
+    
     if (isManualMode) {
-      String baseText = 'Click cities in order. Invalid connections blocked.';
+      String baseText = 'Click cities in order to build path manually. Blockers prevent invalid connections.';
       if (manualPath.length == cities.length && !isPathClosed) {
-        baseText += ' Click first city to close path.';
+        baseText += ' Click first city to close the path.';
       } else if (isPathClosed) {
-        baseText += ' Path closed!';
-      } else if (manualPath.length < cities.length) {
-        baseText += ' Need all ${cities.length} cities to close.';
+        baseText += ' Path completed successfully!';
+      } else if (manualPath.isNotEmpty) {
+        baseText += ' Progress: ${manualPath.length}/${cities.length} cities visited.';
       }
-      return '$baseText (${manualPath.length}/${cities.length})';
+      return baseText;
     }
     
     switch (currentMode) {
       case InteractionMode.add:
-        return 'Tap to add cities. Need 3+ cities for TSP.';
+        return 'Tap anywhere to add cities. You need at least 3 cities to solve the TSP.';
       case InteractionMode.delete:
-        return 'Tap cities or blockers to delete.';
+        return 'Tap on cities or blockers to remove them from the canvas.';
       case InteractionMode.move:
-        return 'Drag cities or blockers to move.';
+        return 'Drag cities or blockers to reposition them. Path will update automatically.';
       case InteractionMode.manual:
-        return 'Click cities in order to build path.';
+        return 'Click cities in the order you want to visit them.';
     }
   }
 }
 
-class TSPPainter extends CustomPainter {
+class EnhancedTSPPainter extends CustomPainter {
   final List<Offset> cities;
   final List<Offset> blockers;
   final List<int> path;
@@ -737,8 +1114,9 @@ class TSPPainter extends CustomPainter {
   final bool isManualMode;
   final List<int> manualPath;
   final bool isPathClosed;
+  final bool isSolving;
 
-  TSPPainter({
+  EnhancedTSPPainter({
     required this.cities,
     required this.blockers,
     required this.path,
@@ -749,335 +1127,343 @@ class TSPPainter extends CustomPainter {
     required this.isManualMode,
     required this.manualPath,
     required this.isPathClosed,
+    required this.isSolving,
   });
 
   @override
   void paint(Canvas canvas, Size size) {
-    // Draw blockers first (so they appear behind paths)
-    Paint blockerPaint = Paint()
-      ..color = Colors.brown[600]!
-      ..style = PaintingStyle.fill;
+    _drawModeIndicator(canvas, size);
+    
+    if (isSolving) {
+      _drawSolvingIndicator(canvas, size);
+    }
+    _drawBlockers(canvas);
+    _drawPath(canvas);
+    _drawCities(canvas);
+  }
 
-    Paint blockerBorderPaint = Paint()
-      ..color = Colors.brown[900]!
-      ..strokeWidth = 2.0
-      ..style = PaintingStyle.stroke;
-
-    Paint draggedBlockerPaint = Paint()
-      ..color = Colors.brown[400]!
-      ..style = PaintingStyle.fill;
-
-    Paint draggedBlockerBorderPaint = Paint()
-      ..color = Colors.brown[800]!
-      ..strokeWidth = 3.0
-      ..style = PaintingStyle.stroke;
-
+  void _drawBlockers(Canvas canvas) {
     for (int i = 0; i < blockers.length; i++) {
-      Paint currentBlockerPaint;
-      Paint currentBlockerBorderPaint;
-      double radius = 8;
+      double radius = TSPConstants.blockerRadius;
+      Color fillColor = Colors.brown[600]!;
+      Color borderColor = Colors.brown[900]!;
+      double strokeWidth = 2.0;
 
+      // Highlight dragged blocker
       if (i == draggedBlockerIndex) {
-        currentBlockerPaint = draggedBlockerPaint;
-        currentBlockerBorderPaint = draggedBlockerBorderPaint;
-        radius = 10;
-      } else {
-        currentBlockerPaint = blockerPaint;
-        currentBlockerBorderPaint = blockerBorderPaint;
+        fillColor = Colors.brown[400]!;
+        borderColor = Colors.brown[800]!;
+        strokeWidth = 3.0;
+        radius = TSPConstants.highlightRadius;
       }
 
-      canvas.drawCircle(blockers[i], radius, currentBlockerPaint);
-      canvas.drawCircle(blockers[i], radius, currentBlockerBorderPaint);
+      Paint fillPaint = Paint()
+        ..color = fillColor
+        ..style = PaintingStyle.fill;
 
-      // Draw "B" text on blockers
-      TextPainter textPainter = TextPainter(
-        text: TextSpan(
-          text: 'B',
-          style: TextStyle(
-            color: Colors.white,
-            fontSize: 12,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        textDirection: TextDirection.ltr,
-      );
-      textPainter.layout();
-      textPainter.paint(
-        canvas,
-        Offset(
-          blockers[i].dx - textPainter.width / 2,
-          blockers[i].dy - textPainter.height / 2,
-        ),
-      );
-    }
-
-    // Draw path
-    if (path.length > 1) {
-      Paint pathPaint = Paint()
-        ..color = Colors.blue[600]!
-        ..strokeWidth = 2.0
+      Paint borderPaint = Paint()
+        ..color = borderColor
+        ..strokeWidth = strokeWidth
         ..style = PaintingStyle.stroke;
 
-      Path drawPath = Path();
-      drawPath.moveTo(cities[path[0]].dx, cities[path[0]].dy);
+      canvas.drawCircle(blockers[i], radius, fillPaint);
+      canvas.drawCircle(blockers[i], radius, borderPaint);
 
-      for (int i = 1; i < path.length; i++) {
-        drawPath.lineTo(cities[path[i]].dx, cities[path[i]].dy);
-      }
+      // Draw "B" label
+      _drawText(canvas, blockers[i], 'B', Colors.white, 12, FontWeight.bold, true);
+    }
+  }
 
-      // Close the loop only if not in manual mode OR if path is closed in manual mode
-      if (path.length > 2 && (!isManualMode || isPathClosed)) {
-        drawPath.lineTo(cities[path[0]].dx, cities[path[0]].dy);
-      }
+  void _drawPath(Canvas canvas) {
+    if (path.length < 2) return;
 
-      canvas.drawPath(drawPath, pathPaint);
+    Paint pathPaint = Paint()
+      ..color = Colors.blue[600]!
+      ..strokeWidth = TSPConstants.pathStrokeWidth
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round;
 
-      // Draw arrows to show direction
-      Paint arrowPaint = Paint()
-        ..color = Colors.blue[800]!
-        ..strokeWidth = 1.5;
-
-      for (int i = 0; i < path.length; i++) {
-        int nextIndex = (i + 1) % path.length;
-        if (path.length == 2 && i == 1) break;
-        if (isManualMode && !isPathClosed && i == path.length - 1) break;
-
-        Offset from = cities[path[i]];
-        Offset to = cities[path[nextIndex]];
-        
-        // Calculate arrow position (80% along the line)
-        Offset arrowPos = Offset(
-          from.dx + (to.dx - from.dx) * 0.8,
-          from.dy + (to.dy - from.dy) * 0.8,
-        );
-
-        // Calculate arrow direction
-        double angle = atan2(to.dy - from.dy, to.dx - from.dx);
-        
-        // Draw arrowhead
-        canvas.drawLine(
-          arrowPos,
-          Offset(
-            arrowPos.dx - 10 * cos(angle - 0.5),
-            arrowPos.dy - 10 * sin(angle - 0.5),
-          ),
-          arrowPaint,
-        );
-        canvas.drawLine(
-          arrowPos,
-          Offset(
-            arrowPos.dx - 10 * cos(angle + 0.5),
-            arrowPos.dy - 10 * sin(angle + 0.5),
-          ),
-          arrowPaint,
-        );
-      }
+    // Draw path lines
+    for (int i = 0; i < path.length - 1; i++) {
+      canvas.drawLine(cities[path[i]], cities[path[i + 1]], pathPaint);
     }
 
-    // Draw cities
-    Paint cityPaint = Paint()
-      ..color = Colors.red[600]!
-      ..style = PaintingStyle.fill;
+    // Draw closing line if needed
+    if (path.length > 2 && (!isManualMode || isPathClosed)) {
+      canvas.drawLine(cities[path.last], cities[path.first], pathPaint);
+    }
 
-    Paint cityBorderPaint = Paint()
-      ..color = Colors.red[900]!
-      ..strokeWidth = 2.0
-      ..style = PaintingStyle.stroke;
+    // Draw direction arrows
+    _drawDirectionArrows(canvas);
+  }
 
-    // Special paint for delete mode
-    Paint deleteCityPaint = Paint()
-      ..color = Colors.red[300]!
-      ..style = PaintingStyle.fill;
+  void _drawDirectionArrows(Canvas canvas) {
+    Paint arrowPaint = Paint()
+      ..color = Colors.blue[800]!
+      ..strokeWidth = TSPConstants.arrowStrokeWidth
+      ..strokeCap = StrokeCap.round;
 
-    Paint deleteCityBorderPaint = Paint()
-      ..color = Colors.red[600]!
-      ..strokeWidth = 2.0
-      ..style = PaintingStyle.stroke;
+    for (int i = 0; i < path.length; i++) {
+      int nextIndex = (i + 1) % path.length;
+      if (path.length == 2 && i == 1) break;
+      if (isManualMode && !isPathClosed && i == path.length - 1) break;
 
-    // Special paint for move mode
-    Paint moveCityPaint = Paint()
-      ..color = Colors.green[600]!
-      ..style = PaintingStyle.fill;
-
-    Paint moveCityBorderPaint = Paint()
-      ..color = Colors.green[900]!
-      ..strokeWidth = 2.0
-      ..style = PaintingStyle.stroke;
-
-    // Special paint for manual mode
-    Paint manualCityPaint = Paint()
-      ..color = Colors.purple[600]!
-      ..style = PaintingStyle.fill;
-
-    Paint manualCityBorderPaint = Paint()
-      ..color = Colors.purple[900]!
-      ..strokeWidth = 2.0
-      ..style = PaintingStyle.stroke;
-
-    Paint visitedCityPaint = Paint()
-      ..color = Colors.purple[400]!
-      ..style = PaintingStyle.fill;
-
-    Paint nextCityPaint = Paint()
-      ..color = Colors.amber[600]!
-      ..style = PaintingStyle.fill;
-
-    Paint nextCityBorderPaint = Paint()
-      ..color = Colors.amber[900]!
-      ..strokeWidth = 3.0
-      ..style = PaintingStyle.stroke;
-
-    for (int i = 0; i < cities.length; i++) {
-      Paint currentCityPaint;
-      Paint currentBorderPaint;
-      Color textColor = Colors.white;
-      double radius = 8;
-
-      // Choose colors based on current mode and state
-      if (isManualMode) {
-        int pathIndex = manualPath.indexOf(i);
-        if (pathIndex != -1) {
-          // City is in the manual path
-          currentCityPaint = visitedCityPaint;
-          currentBorderPaint = manualCityBorderPaint;
-          
-          // Highlight the first city differently if path can be closed
-          if (i == manualPath.first && manualPath.length == cities.length) {
-            if (isPathClosed) {
-              // Show closed state with special color
-              currentCityPaint = Paint()
-                ..color = Colors.teal[600]!
-                ..style = PaintingStyle.fill;
-              currentBorderPaint = Paint()
-                ..color = Colors.teal[900]!
-                ..strokeWidth = 4.0
-                ..style = PaintingStyle.stroke;
-            } else {
-              // Show that this city can close the path
-              currentCityPaint = Paint()
-                ..color = Colors.lime[600]!
-                ..style = PaintingStyle.fill;
-              currentBorderPaint = Paint()
-                ..color = Colors.lime[900]!
-                ..strokeWidth = 3.0
-                ..style = PaintingStyle.stroke;
-            }
-            radius = 10;
-          }
-          
-          // Highlight the last city in the path (if not the first city)
-          if (pathIndex == manualPath.length - 1 && i != manualPath.first) {
-            currentCityPaint = nextCityPaint;
-            currentBorderPaint = nextCityBorderPaint;
-            radius = 10;
-          }
-        } else {
-          // City not yet visited
-          currentCityPaint = manualCityPaint;
-          currentBorderPaint = manualCityBorderPaint;
-        }
-      } else if (currentMode == InteractionMode.delete) {
-        currentCityPaint = deleteCityPaint;
-        currentBorderPaint = deleteCityBorderPaint;
-      } else if (currentMode == InteractionMode.move) {
-        if (i == draggedCityIndex) {
-          // Highlight the city being dragged
-          currentCityPaint = Paint()
-            ..color = Colors.orange[600]!
-            ..style = PaintingStyle.fill;
-          currentBorderPaint = Paint()
-            ..color = Colors.orange[900]!
-            ..strokeWidth = 3.0
-            ..style = PaintingStyle.stroke;
-          radius = 10;
-        } else {
-          currentCityPaint = moveCityPaint;
-          currentBorderPaint = moveCityBorderPaint;
-        }
-      } else {
-        currentCityPaint = cityPaint;
-        currentBorderPaint = cityBorderPaint;
-      }
+      Offset from = cities[path[i]];
+      Offset to = cities[path[nextIndex]];
       
-      canvas.drawCircle(cities[i], radius, currentCityPaint);
-      canvas.drawCircle(cities[i], radius, currentBorderPaint);
-
-      // Draw city number or path order
-      String displayText;
-      if (isManualMode) {
-        int pathIndex = manualPath.indexOf(i);
-        if (pathIndex != -1) {
-          displayText = (pathIndex + 1).toString();
-        } else {
-          displayText = i.toString();
-        }
-      } else {
-        displayText = i.toString();
-      }
-
-      TextPainter textPainter = TextPainter(
-        text: TextSpan(
-          text: displayText,
-          style: TextStyle(
-            color: textColor,
-            fontSize: 12,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        textDirection: TextDirection.ltr,
+      // Arrow position (75% along the line)
+      Offset arrowPos = Offset(
+        from.dx + (to.dx - from.dx) * 0.75,
+        from.dy + (to.dy - from.dy) * 0.75,
       );
-      textPainter.layout();
-      textPainter.paint(
-        canvas,
+
+      // Arrow direction
+      double angle = atan2(to.dy - from.dy, to.dx - from.dx);
+      
+      // Draw arrowhead with better proportions
+      double arrowLength = 12;
+      double arrowAngle = 0.6;
+      
+      canvas.drawLine(
+        arrowPos,
         Offset(
-          cities[i].dx - textPainter.width / 2,
-          cities[i].dy - textPainter.height / 2,
+          arrowPos.dx - arrowLength * cos(angle - arrowAngle),
+          arrowPos.dy - arrowLength * sin(angle - arrowAngle),
         ),
+        arrowPaint,
+      );
+      canvas.drawLine(
+        arrowPos,
+        Offset(
+          arrowPos.dx - arrowLength * cos(angle + arrowAngle),
+          arrowPos.dy - arrowLength * sin(angle + arrowAngle),
+        ),
+        arrowPaint,
       );
     }
+  }
 
-    // Draw mode indicator in top-left corner
-    String modeText = '';
-    Color modeColor = Colors.grey[600]!;
+  void _drawCities(Canvas canvas) {
+    for (int i = 0; i < cities.length; i++) {
+      Map<String, dynamic> appearance = _getCityAppearance(i);
+      double radius = appearance['radius'];
+      Color fillColor = appearance['fillColor'];
+      Color borderColor = appearance['borderColor'];
+      double strokeWidth = appearance['strokeWidth'];
+
+      Paint fillPaint = Paint()
+        ..color = fillColor
+        ..style = PaintingStyle.fill;
+
+      Paint borderPaint = Paint()
+        ..color = borderColor
+        ..strokeWidth = strokeWidth
+        ..style = PaintingStyle.stroke;
+
+      canvas.drawCircle(cities[i], radius, fillPaint);
+      canvas.drawCircle(cities[i], radius, borderPaint);
+
+      // Draw city label
+      String label = _getCityLabel(i);
+      _drawText(canvas, cities[i], label, Colors.white, 12, FontWeight.bold, true);
+    }
+  }
+
+  Map<String, dynamic> _getCityAppearance(int cityIndex) {
+    double radius = TSPConstants.cityRadius;
+    Color fillColor = Colors.red[600]!;
+    Color borderColor = Colors.red[900]!;
+    double strokeWidth = 2.0;
+    
     if (isManualMode) {
-      modeText = 'MANUAL MODE';
-      modeColor = Colors.purple[600]!;
+      int pathIndex = manualPath.indexOf(cityIndex);
+      
+      if (pathIndex != -1) {
+        // City is in manual path
+        fillColor = Colors.purple[400]!;
+        borderColor = Colors.purple[900]!;
+        
+        // Special highlighting for closeable path
+        if (cityIndex == manualPath.first && manualPath.length == cities.length) {
+          if (isPathClosed) {
+            fillColor = Colors.teal[600]!;
+            borderColor = Colors.teal[900]!;
+            strokeWidth = 4.0;
+          } else {
+            fillColor = Colors.lime[600]!;
+            borderColor = Colors.lime[900]!;
+            strokeWidth = 3.0;
+          }
+          radius = TSPConstants.highlightRadius;
+        }
+        
+        // Highlight current end of path
+        if (pathIndex == manualPath.length - 1 && cityIndex != manualPath.first) {
+          fillColor = Colors.amber[600]!;
+          borderColor = Colors.amber[900]!;
+          strokeWidth = 3.0;
+          radius = TSPConstants.highlightRadius;
+        }
+      } else {
+        fillColor = Colors.purple[600]!;
+        borderColor = Colors.purple[900]!;
+      }
     } else {
+      // Mode-based appearance
       switch (currentMode) {
-        case InteractionMode.add:
-          modeText = 'ADD MODE';
-          modeColor = Colors.blue[600]!;
-          break;
         case InteractionMode.delete:
-          modeText = 'DELETE MODE';
-          modeColor = Colors.red[600]!;
+          fillColor = Colors.red[300]!;
+          borderColor = Colors.red[600]!;
           break;
         case InteractionMode.move:
-          modeText = 'MOVE MODE';
-          modeColor = Colors.green[600]!;
+          if (cityIndex == draggedCityIndex) {
+            fillColor = Colors.orange[600]!;
+            borderColor = Colors.orange[900]!;
+            strokeWidth = 3.0;
+            radius = TSPConstants.highlightRadius;
+          } else {
+            fillColor = Colors.green[600]!;
+            borderColor = Colors.green[900]!;
+          }
           break;
-        case InteractionMode.manual:
-          modeText = 'MANUAL MODE';
-          modeColor = Colors.purple[600]!;
+        default:
+          fillColor = Colors.red[600]!;
+          borderColor = Colors.red[900]!;
           break;
       }
     }
+    
+    return {
+      'radius': radius,
+      'fillColor': fillColor,
+      'borderColor': borderColor,
+      'strokeWidth': strokeWidth,
+    };
+  }
 
-    TextPainter modeTextPainter = TextPainter(
+  String _getCityLabel(int cityIndex) {
+    if (isManualMode) {
+      int pathIndex = manualPath.indexOf(cityIndex);
+      return pathIndex != -1 ? (pathIndex + 1).toString() : cityIndex.toString();
+    }
+    return cityIndex.toString();
+  }
+
+  void _drawModeIndicator(Canvas canvas, Size size) {
+    String modeText = _getModeText();
+    Color modeColor = _getModeColor();
+
+    _drawText(
+      canvas,
+      Offset(15, 15),
+      modeText,
+      modeColor,
+      14,
+      FontWeight.bold,
+      false,
+    );
+  }
+
+  void _drawSolvingIndicator(Canvas canvas, Size size) {
+    // Draw semi-transparent overlay
+    Paint overlayPaint = Paint()
+      ..color = Colors.black.withOpacity(0.3);
+    canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height), overlayPaint);
+
+    // Draw indicator in center
+    Offset center = Offset(size.width / 2, size.height / 2);
+    Paint indicatorPaint = Paint()
+      ..color = Colors.white
+      ..strokeWidth = 4
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round;
+
+    // Simple circle indicator
+    canvas.drawCircle(center, 30, indicatorPaint);
+    
+    _drawText(
+      canvas,
+      Offset(center.dx, center.dy + 50),
+      'Solving...',
+      Colors.white,
+      16,
+      FontWeight.bold,
+      false,
+    );
+  }
+
+  String _getModeText() {
+    if (isSolving) return 'SOLVING';
+    if (isManualMode) return 'MANUAL MODE';
+    
+    switch (currentMode) {
+      case InteractionMode.add:
+        return 'ADD MODE';
+      case InteractionMode.delete:
+        return 'DELETE MODE';
+      case InteractionMode.move:
+        return 'MOVE MODE';
+      case InteractionMode.manual:
+        return 'MANUAL MODE';
+    }
+  }
+
+  Color _getModeColor() {
+    if (isSolving) return Colors.orange[600]!;
+    if (isManualMode) return Colors.purple[600]!;
+    
+    switch (currentMode) {
+      case InteractionMode.add:
+        return Colors.blue[600]!;
+      case InteractionMode.delete:
+        return Colors.red[600]!;
+      case InteractionMode.move:
+        return Colors.green[600]!;
+      case InteractionMode.manual:
+        return Colors.purple[600]!;
+    }
+  }
+
+  void _drawText(Canvas canvas, Offset position, String text, 
+  Color color, double fontSize, FontWeight fontWeight, bool center) {
+    TextPainter textPainter = TextPainter(
       text: TextSpan(
-        text: modeText,
+        text: text,
         style: TextStyle(
-          color: modeColor,
-          fontSize: 14,
-          fontWeight: FontWeight.bold,
+          color: color,
+          fontSize: fontSize,
+          fontWeight: fontWeight,
         ),
       ),
       textDirection: TextDirection.ltr,
     );
-    modeTextPainter.layout();
-    modeTextPainter.paint(canvas, Offset(10, 10));
+    textPainter.layout();
+    textPainter.paint(
+      canvas,
+      Offset(
+        (center ? position.dx - textPainter.width / 2 : position.dx),
+        (center ? position.dy - textPainter.height / 2 : position.dy),
+      ),
+    );
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
+  bool shouldRepaint(covariant CustomPainter oldDelegate) {
+    if (oldDelegate is! EnhancedTSPPainter) return true;
+    
+    // Add check for "draggedBlockerIndex != null" to workaround blocker position freeze 
+    // when showing path
+
+    return cities != oldDelegate.cities ||
+           blockers != oldDelegate.blockers ||
+           path != oldDelegate.path ||
+           currentMode != oldDelegate.currentMode ||
+           draggedCityIndex != oldDelegate.draggedCityIndex ||
+           draggedBlockerIndex != oldDelegate.draggedBlockerIndex ||
+           draggedBlockerIndex != null ||
+           isManualMode != oldDelegate.isManualMode ||
+           manualPath != oldDelegate.manualPath ||
+           isPathClosed != oldDelegate.isPathClosed ||
+           isSolving != oldDelegate.isSolving;
+  }
 }
