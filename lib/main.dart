@@ -568,7 +568,7 @@ class _TSPHomePageState extends State<TSPHomePage> {
 
       for (int i = 1; i < currentSolution.length - 1; i++) {
         for (int j = i + 1; j < currentSolution.length; j++) {
-          if (j - i == 1) continue;
+          // if (j - i == 1) continue; // Why?
 
           // Create new path with 2-opt swap
           List<int> newSolution = List.from(currentSolution);
