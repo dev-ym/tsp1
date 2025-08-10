@@ -47,7 +47,7 @@ class TSPApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Advanced TSP Solver',
+      title: 'TSP Solver',
       theme: ThemeData(
         primarySwatch: Colors.blue,
         visualDensity: VisualDensity.adaptivePlatformDensity,
@@ -428,7 +428,36 @@ class _TSPHomePageState extends State<TSPHomePage> {
     return length;
   }
 
-  // Enhanced TSP Solver with multiple algorithms
+  Future<void> _improve() async {
+    if (path.isNotEmpty) {
+      bool improved = false;
+      setState(() {
+        isSolving = true;
+        isManualMode = false;
+      });
+      List<int>? candidate = await _solveTwoOpt(path);
+      bool ccc = (candidate != null);
+      if (candidate != null) {
+          double newPathLength = _calculatePathLength(candidate);
+          if (newPathLength < pathLength) {
+            improved = true;
+            setState(() {
+              isSolving = false;
+              isManualMode = false;
+              path = candidate;
+              pathLength = newPathLength;
+            });
+          }
+      }
+      if (! improved) {
+        setState(() {
+          isSolving = false;
+          isManualMode = false;
+        });
+      }
+    }
+  }
+      // Enhanced TSP Solver with multiple algorithms
   Future<void> _solveTSP() async {
     if (cities.length < 3 || isSolving) return;
 
@@ -449,7 +478,7 @@ class _TSPHomePageState extends State<TSPHomePage> {
           solution = await _solveGeneticAlgorithm();
           break;
         case TSPAlgorithm.twoOpt:
-          solution = await _solveTwoOpt();
+          solution = await _solveTwoOpt(null);
           break;
       }
 
@@ -521,9 +550,9 @@ class _TSPHomePageState extends State<TSPHomePage> {
     }
   }
 
-  Future<List<int>?> _solveTwoOpt() async {
+  Future<List<int>?> _solveTwoOpt(List<int>? baseSolution) async {
     // Start with nearest neighbor, then improve with 2-opt
-    List<int>? initialSolution = await _solveNearestNeighbor();
+    List<int>? initialSolution = (baseSolution != null) ? baseSolution : await _solveNearestNeighbor();
     if (initialSolution == null) return null;
 
     await Future.delayed(Duration(milliseconds: 200));
@@ -816,6 +845,19 @@ class _TSPHomePageState extends State<TSPHomePage> {
                   color: Colors.blue,
                 ),
                 _buildEnhancedButton(
+                  onPressed: path.length > 0 ? _improve : null,
+                  icon: isSolving ? Icons.hourglass_empty : Icons.route,
+                  label: 'Improve',
+                  color: Colors.blue,
+                ),
+                isManualMode ?
+                _buildEnhancedButton(
+                  onPressed: _exitManualMode,
+                  icon: Icons.touch_app,
+                  label: 'Exit\nManual',
+                  color: isManualMode ? Colors.purple : Colors.grey,
+                )                  :
+                _buildEnhancedButton(
                   onPressed: cities.length >= 2 && !isSolving ? _startManualMode : null,
                   icon: Icons.touch_app,
                   label: 'Manual',
@@ -830,81 +872,42 @@ class _TSPHomePageState extends State<TSPHomePage> {
                 _buildEnhancedButton(
                   onPressed: !isSolving ? _addRandomCities : null,
                   icon: Icons.add_location,
-                  label: 'Add Cities',
+                  label: 'Add\nCities',
                   color: Colors.blue,
                 ),
                 _buildEnhancedButton(
                   onPressed: !isSolving ? _addRandomBlockers : null,
                   icon: Icons.block,
-                  label: 'Add Blockers',
+                  label: 'Add\nBlockers',
                   color: Colors.brown,
+                ),
+                _buildEnhancedButton(
+                  onPressed: isManualMode ? _clearManualPath : path.length > 0 ? _resetPath : null,
+                  icon: Icons.refresh,
+                  label: 'Reset\nPath',
+                  color: Colors.orange,
                 ),
               ],
             ),
           ),
           
-          // Manual mode controls with improved spacing
-          if (isManualMode)
-            Container(
-              margin: EdgeInsets.all(TSPConstants.compactButtonPadding),
-              padding: EdgeInsets.all(TSPConstants.buttonPadding),
-              decoration: BoxDecoration(
-                color: Colors.purple[50],
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.purple[200]!),
-              ),
-              child: Column(
-                children: [
-                  Text(
-                    'Manual Mode Active',
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      color: Colors.purple[700],
-                      fontSize: 13,
-                    ),
-                  ),
-                  SizedBox(height: TSPConstants.buttonSpacing),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      _buildCompactButton(
-                        onPressed: _clearManualPath,
-                        icon: Icons.refresh,
-                        label: 'Reset Path',
-                        backgroundColor: Colors.orange[600],
-                        foregroundColor: Colors.white,
-                      ),
-                      SizedBox(width: TSPConstants.buttonSpacing),
-                      _buildCompactButton(
-                        onPressed: _exitManualMode,
-                        icon: Icons.exit_to_app,
-                        label: 'Exit Manual',
-                        backgroundColor: Colors.grey[600],
-                        foregroundColor: Colors.white,
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          
           // Mode selection with better touch targets
-          if (!isManualMode ) // && !isSolving
-            Container(
-              padding: EdgeInsets.all(TSPConstants.buttonPadding),
-              child: Column(
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    children: [
-                      _buildModeButton(InteractionMode.add, Icons.add_location, 'Add'),
-                      _buildModeButton(InteractionMode.delete, Icons.delete_outline, 'Delete'),
-                      _buildModeButton(InteractionMode.move, Icons.open_with, 'Move'),
-                    ],
-                  ),
-                ],
-              ),
+          // if (!isManualMode ) // && !isSolving
+          Container(
+            padding: EdgeInsets.all(TSPConstants.buttonPadding),
+            child: Column(
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    _buildModeButton(InteractionMode.add, Icons.add_location, 'Add'),
+                    _buildModeButton(InteractionMode.delete, Icons.delete_outline, 'Delete'),
+                    _buildModeButton(InteractionMode.move, Icons.open_with, 'Move'),
+                  ],
+                ),
+              ],
             ),
+          ),
           
           // Instructions with better typography
           Padding(
