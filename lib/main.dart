@@ -753,7 +753,7 @@ class _TSPHomePageState extends State<TSPHomePage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Advanced TSP Solver'),
+        title: Text('TSP Solver'),
         backgroundColor: Colors.blue[700],
         elevation: 2,
       ),

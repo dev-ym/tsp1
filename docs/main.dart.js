@@ -60556,7 +60556,7 @@ r=1+b.lR(a.length-1)
 q=a[s]
 a[s]=a[r]
 a[r]=q},
-R(a){var s,r,q,p,o,n,m,l,k,j,i=this,h=null,g=A.lS("Advanced TSP Solver",h,h,h,h,h,h),f=t.V,e=A.c([new A.b5(1,B.v,A.ay(B.c.ah(76.5),B.bG.v()>>>16&255,B.bG.v()>>>8&255,B.bG.v()&255),new A.m(0,2),3)],f),d=t.E
+R(a){var s,r,q,p,o,n,m,l,k,j,i=this,h=null,g=A.lS("TSP Solver",h,h,h,h,h,h),f=t.V,e=A.c([new A.b5(1,B.v,A.ay(B.c.ah(76.5),B.bG.v()>>>16&255,B.bG.v()>>>8&255,B.bG.v()&255),new A.m(0,2),3)],f),d=t.E
 e=A.mJ(A.N6(A.c([A.nK(A.c([A.AT(B.B2,B.dP,h,h),A.jI(h,h,6),A.lS("Path Length: "+B.c.O(i.w,1),h,h,h,A.f4(h,h,B.dP,h,h,h,h,h,h,h,h,14,h,h,B.b2,h,h,!0,h,h,h,h,h,h,h,h),h,h)],d),B.aq,B.hK,B.bm)],d),B.aU,B.bm),new A.dr(B.jW,h,h,h,e,h,B.ap),h,h,h,new A.b6(12,12,12,12),1/0)
 s=A.lS("Algorithm: ",h,h,h,A.f4(h,h,h,h,h,h,h,h,h,h,h,h,h,h,B.b2,h,h,!0,h,h,h,h,h,h,h,h),h,h)
 r=i.z
