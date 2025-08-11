@@ -976,10 +976,21 @@ class _TSPHomePageState extends State<TSPHomePage> {
       child: ElevatedButton.icon(
         onPressed: onPressed,
         icon: Icon(icon, size: 18),
-        label: Text(
-          label,
-          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-        ),
+        
+        label: // Use FittedBox to avoid clipping in android
+            FittedBox(
+            fit: BoxFit.contain,
+            child: Text(
+              label,
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+            )
+          )
+        // Text(
+        //   label,
+        //   style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+        // )
+        ,
         style: ElevatedButton.styleFrom(
           backgroundColor: color[600],
           foregroundColor: Colors.white,
@@ -991,31 +1002,6 @@ class _TSPHomePageState extends State<TSPHomePage> {
             borderRadius: BorderRadius.circular(8),
           ),
           elevation: 2,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildCompactButton({
-    required VoidCallback? onPressed,
-    required IconData icon,
-    required String label,
-    Color? backgroundColor,
-    Color? foregroundColor,
-  }) {
-    return SizedBox(
-      height: 36,
-      child: ElevatedButton.icon(
-        onPressed: onPressed,
-        icon: Icon(icon, size: 16),
-        label: Text(label, style: TextStyle(fontSize: 14)),
-        style: ElevatedButton.styleFrom(
-          backgroundColor: backgroundColor,
-          foregroundColor: foregroundColor,
-          padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(6),
-          ),
         ),
       ),
     );
