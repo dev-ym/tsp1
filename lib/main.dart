@@ -844,21 +844,21 @@ class _TSPHomePageState extends State<TSPHomePage> {
                 _buildEnhancedButton(
                   onPressed: !isSolving ? _addRandomCities : null,
                   icon: Icons.add_location,
-                  label: 'Add Cities',
+                  label: 'Add\nCities',
                   color: Colors.blue,
                 ),
                 ?isManualMode ? null :
                 _buildEnhancedButton(
                   onPressed: !isSolving ? _addRandomBlockers : null,
                   icon: Icons.block,
-                  label: 'Add Blockers',
+                  label: 'Add\nBlockers',
                   color: Colors.brown,
                 ),
                 ?isManualMode ?
                 _buildEnhancedButton(
                   onPressed: (manualPath != null && manualPath.length > 1) ? _clearManualPath : null,
                   icon: Icons.refresh,
-                  label: 'Reset Path',
+                  label: 'Reset\nPath',
                   color: Colors.orange,
                 ) : null,
               ],
@@ -977,11 +977,19 @@ class _TSPHomePageState extends State<TSPHomePage> {
         onPressed: onPressed,
         icon: Icon(icon, size: 18),
         
-        label: 
-        Text(
-          label,
-          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-        )
+        label: // Use FittedBox to avoid clipping in android
+            FittedBox(
+            fit: BoxFit.contain,
+            child: Text(
+              label,
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+            )
+          )
+        // Text(
+        //   label,
+        //   style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+        // )
         ,
         style: ElevatedButton.styleFrom(
           backgroundColor: color[600],
