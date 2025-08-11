@@ -27,7 +27,7 @@ class TSPConstants {
   // Algorithm Constants
   static const int maxOptimizationIterations = 500;
   static const int geneticAlgorithmPopulation = 30;
-  static const int geneticAlgorithmGenerations = 50;
+  static const int geneticAlgorithmGenerations = 500;
   static const double mutationRate = 0.1;
   static const double crossoverRate = 0.8;
   
@@ -58,7 +58,6 @@ class TSPApp extends StatelessWidget {
 }
 
 enum InteractionMode { add, delete, move, manual }
-enum TSPAlgorithm { nearestNeighbor, genetic, twoOpt }
 
 class TSPHomePage extends StatefulWidget {
   @override
@@ -73,7 +72,6 @@ class _TSPHomePageState extends State<TSPHomePage> {
   double pathLength = 0.0;
   bool showPath = false;
   InteractionMode currentMode = InteractionMode.add;
-  TSPAlgorithm selectedAlgorithm = TSPAlgorithm.nearestNeighbor;
   int? draggedCityIndex;
   int? draggedBlockerIndex;
   bool isManualMode = false;
@@ -247,12 +245,14 @@ class _TSPHomePageState extends State<TSPHomePage> {
   }
 
   void _resetPath() {
-    showPath = false;
-    pathLength = 0.0;
-    path.clear();
-    manualPath.clear();
-    isManualMode = false;
-    isPathClosed = false;
+    setState(() {
+      showPath = false;
+      pathLength = 0.0;
+      path.clear();
+      manualPath.clear();
+      isManualMode = false;
+      isPathClosed = false;
+    });
   }
 
   void _clearCities() {
@@ -413,7 +413,8 @@ class _TSPHomePageState extends State<TSPHomePage> {
     return _calculateDistance(circleCenter, closestPoint) <= radius;
   }
 
-  double _calculatePathLength(List<int> currentPath) {
+  double _calculatePathLength(List<int>? currentPath) {
+    if (currentPath == null) return 0.0;
     if (currentPath.length < 2) return 0.0;
     
     double length = 0.0;
@@ -429,22 +430,19 @@ class _TSPHomePageState extends State<TSPHomePage> {
   }
 
   Future<void> _improve() async {
-    if (path.isNotEmpty) {
+    if (manualPath.isNotEmpty) {
       bool improved = false;
       setState(() {
         isSolving = true;
-        isManualMode = false;
       });
-      List<int>? candidate = await _solveTwoOpt(path);
-      bool ccc = (candidate != null);
+      List<int>? candidate = await _solveTwoOpt(manualPath);
       if (candidate != null) {
           double newPathLength = _calculatePathLength(candidate);
           if (newPathLength < pathLength) {
             improved = true;
             setState(() {
               isSolving = false;
-              isManualMode = false;
-              path = candidate;
+              manualPath = candidate;
               pathLength = newPathLength;
             });
           }
@@ -452,7 +450,6 @@ class _TSPHomePageState extends State<TSPHomePage> {
       if (! improved) {
         setState(() {
           isSolving = false;
-          isManualMode = false;
         });
       }
     }
@@ -468,20 +465,28 @@ class _TSPHomePageState extends State<TSPHomePage> {
     });
 
     try {
-      List<int>? solution;
-      
-      switch (selectedAlgorithm) {
-        case TSPAlgorithm.nearestNeighbor:
-          solution = await _solveNearestNeighbor();
-          break;
-        case TSPAlgorithm.genetic:
-          solution = await _solveGeneticAlgorithm();
-          break;
-        case TSPAlgorithm.twoOpt:
-          solution = await _solveTwoOpt(null);
-          break;
+      List<int>? sNearest = await _solveNearestNeighbor();
+      if (sNearest != null) {
+        sNearest = await _solveTwoOpt(sNearest);
       }
-
+      List<int>? sGenetic = await _solveGeneticAlgorithm();
+      if (sGenetic != null) {
+        sGenetic = await _solveTwoOpt(sGenetic);
+      }
+      List<int>? solution = null;
+      double sLength = 0;
+      if (sNearest == null) {
+        solution = sGenetic;
+        sLength = _calculatePathLength(solution);
+      } else if (sGenetic == null) {
+        solution = sNearest;
+        sLength = _calculatePathLength(solution);
+      } else {
+        double nLength = _calculatePathLength(sNearest);
+        double gLength = _calculatePathLength(sGenetic);
+        solution = (nLength < gLength) ? sNearest : sGenetic;
+        sLength = (nLength < gLength) ? nLength : gLength;
+      }
       setState(() {
         if (solution != null && solution.length == cities.length) {
           // Verify the solution is valid with blockers
@@ -555,7 +560,7 @@ class _TSPHomePageState extends State<TSPHomePage> {
     List<int>? initialSolution = (baseSolution != null) ? baseSolution : await _solveNearestNeighbor();
     if (initialSolution == null) return null;
 
-    await Future.delayed(Duration(milliseconds: 200));
+    await Future.delayed(Duration(milliseconds: 100));
     
     List<int> currentSolution = List.from(initialSolution);
     double currentLength = _calculatePathLength(currentSolution);
@@ -601,7 +606,7 @@ class _TSPHomePageState extends State<TSPHomePage> {
   }
 
   Future<List<int>?> _solveGeneticAlgorithm() async {
-    await Future.delayed(Duration(milliseconds: 300));
+    await Future.delayed(Duration(milliseconds: 100));
     
     Random random = Random();
     
@@ -791,41 +796,6 @@ class _TSPHomePageState extends State<TSPHomePage> {
                     ),
                   ],
                 ),
-                // SizedBox(height: 8),
-                // Text(
-                //   'Algorithm: ${_getAlgorithmName(selectedAlgorithm)}',
-                //   style: TextStyle(
-                //     fontSize: 12,
-                //     color: Colors.grey[600],
-                //   ),
-                // ),
-              ],
-            ),
-          ),
-          
-          // Algorithm selector
-          Padding(
-            padding: EdgeInsets.all(TSPConstants.compactButtonPadding),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text('Algorithm: ', style: TextStyle(fontWeight: FontWeight.bold)),
-                DropdownButton<TSPAlgorithm>(
-                  value: selectedAlgorithm,
-                  onChanged: isSolving ? null : (TSPAlgorithm? newValue) {
-                    if (newValue != null) {
-                      setState(() {
-                        selectedAlgorithm = newValue;
-                      });
-                    }
-                  },
-                  items: TSPAlgorithm.values.map((TSPAlgorithm algorithm) {
-                    return DropdownMenuItem<TSPAlgorithm>(
-                      value: algorithm,
-                      child: Text(_getAlgorithmName(algorithm)),
-                    );
-                  }).toList(),
-                ),
               ],
             ),
           ),
@@ -844,12 +814,13 @@ class _TSPHomePageState extends State<TSPHomePage> {
                   label: 'Solve',
                   color: Colors.blue,
                 ),
+                ?isManualMode ?
                 _buildEnhancedButton(
                   onPressed: path.length > 0 ? _improve : null,
                   icon: isSolving ? Icons.hourglass_empty : Icons.route,
                   label: 'Improve',
                   color: Colors.blue,
-                ),
+                ) : null,
                 isManualMode ?
                 _buildEnhancedButton(
                   onPressed: _exitManualMode,
@@ -869,24 +840,27 @@ class _TSPHomePageState extends State<TSPHomePage> {
                   label: 'Clear',
                   color: Colors.red,
                 ),
+                ?isManualMode ? null :
                 _buildEnhancedButton(
                   onPressed: !isSolving ? _addRandomCities : null,
                   icon: Icons.add_location,
                   label: 'Add\nCities',
                   color: Colors.blue,
                 ),
+                ?isManualMode ? null :
                 _buildEnhancedButton(
                   onPressed: !isSolving ? _addRandomBlockers : null,
                   icon: Icons.block,
                   label: 'Add\nBlockers',
                   color: Colors.brown,
                 ),
+                ?isManualMode ?
                 _buildEnhancedButton(
-                  onPressed: isManualMode ? _clearManualPath : path.length > 0 ? _resetPath : null,
+                  onPressed: (manualPath != null && manualPath.length > 1) ? _clearManualPath : null,
                   icon: Icons.refresh,
                   label: 'Reset\nPath',
                   color: Colors.orange,
-                ),
+                ) : null,
               ],
             ),
           ),
@@ -898,7 +872,8 @@ class _TSPHomePageState extends State<TSPHomePage> {
             child: Column(
               children: [
                 Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  spacing: 30,
                   children: [
                     _buildModeButton(InteractionMode.add, Icons.add_location, 'Add'),
                     _buildModeButton(InteractionMode.delete, Icons.delete_outline, 'Delete'),
@@ -1116,20 +1091,9 @@ class _TSPHomePageState extends State<TSPHomePage> {
     );
   }
 
-  String _getAlgorithmName(TSPAlgorithm algorithm) {
-    switch (algorithm) {
-      case TSPAlgorithm.nearestNeighbor:
-        return 'Nearest Neighbor';
-      case TSPAlgorithm.genetic:
-        return 'Genetic Algorithm';
-      case TSPAlgorithm.twoOpt:
-        return '2-Opt Optimization';
-    }
-  }
-
   String _getInstructionText() {
     if (isSolving) {
-      return 'Solving TSP with ${_getAlgorithmName(selectedAlgorithm)}...';
+      return 'Solving TSP ...';
     }
     
     if (isManualMode) {
