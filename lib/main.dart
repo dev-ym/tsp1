@@ -443,6 +443,7 @@ class _TSPHomePageState extends State<TSPHomePage> {
             setState(() {
               isSolving = false;
               manualPath = candidate;
+                path = List.from(manualPath);
               pathLength = newPathLength;
             });
           }
